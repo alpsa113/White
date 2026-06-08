@@ -1,0 +1,44 @@
+name: nk-radar
+channels:
+  - conda-forge
+  - pytorch
+  - nvidia
+dependencies:
+  - python=3.10
+  # --- 딥러닝 (GPU: pytorch-cuda, CPU만이면 아래 줄 제거하고 cpuonly 사용) ---
+  - pytorch
+  - torchvision
+  - pytorch-cuda=12.1   # GPU 없으면 이 줄 삭제, 대신 'cpuonly' 추가
+  - lightning
+  # --- 격자·지오공간 ---
+  - xarray
+  - netCDF4
+  - h5py
+  - rasterio
+  - rioxarray
+  - pyproj
+  - pyresample
+  - cartopy
+  - dask
+  # --- 도메인 특화 ---
+  - satpy        # GK-2A 위성 읽기
+  - wradlib      # 레이더 처리
+  - pysteps      # 강수 nowcasting 베이스라인
+  # --- 데이터·과학 ---
+  - numpy
+  - pandas
+  - scipy
+  - scikit-learn
+  # --- 시각화 ---
+  - matplotlib
+  - folium
+  # --- 서비스 ---
+  - fastapi
+  - uvicorn
+  # --- 실험관리·유틸 ---
+  - jupyter
+  - tqdm
+  - pyyaml
+  - pip
+  - pip:
+      - wandb
