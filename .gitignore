@@ -29,3 +29,4 @@ mlruns/
 
 # OS
 .DS_Store
+.Rhistory

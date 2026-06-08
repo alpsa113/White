@@ -1,44 +1,47 @@
-# 북한 지역 합성 기상레이더 기반 위험기상 감시 시스템
+# 소리 데이터 기반 GOP 적 침투 경계 시스템
 
-위성·낙뢰·지형 데이터를 ML로 학습(남한 레이더 정답)하여, 레이더가 없는 북한 상공의
-강수 분포를 "합성 레이더" 형태로 추정하고 접경 위험기상을 감시하는 시스템.
+전방 GOP(일반전초) 환경에서 마이크/음향센서로 수집한 **소리 데이터**를 ML로 분석하여
+적 침투 관련 음향(발자국·금속음·말소리·철책 절단음·차량/드론 등)을 탐지하고,
+실시간으로 경계병에게 경보를 제공하는 시스템.
 
 ## 개념
 ```
-GK-2A 위성 + 낙뢰 + DEM  →  [U-Net 학습: 남한 레이더 합성=정답]  →  북한 합성 반사도
-                                                                      ↓
-                                          GPM/IMERG 검증 · 접경 위험 경보 · 대시보드
+음향센서 수집  →  [전처리: 멜-스펙트로그램]  →  [CNN/CRNN 음향 이벤트 탐지]
+                                                        ↓
+                                   실시간 추론 · 침투 위험 경보 · 대시보드
 ```
 
+## 탐지 대상(예시)
+- 침투 관련: 발자국, 금속 마찰음, 철책 절단/절곡음, 말소리, 차량·드론음, 총성
+- 배경(정상): 바람, 비, 새/동물, 평상 소음
+
 ## 폴더 구조
-- `data/raw` — 원본 다운로드 (git 제외)
-- `data/processed` — 격자 정합·정규화된 학습셋 (git 제외)
-- `src/collect` — 데이터 수집(API/FTP)
-- `src/preprocess` — 좌표·격자 정합, 시간 동기화
-- `src/model` — U-Net 등 모델 정의·학습
-- `src/inference` — 북한 추론·합성 반사도 생성
-- `service` — FastAPI 백엔드 + 웹 대시보드
+- `data/raw` — 원본 음원(녹음/공개데이터) (git 제외)
+- `data/processed` — 스펙트로그램·증강된 학습셋 (git 제외)
+- `src/collect` — 음향 수집/인입 (센서·파일)
+- `src/preprocess` — 스펙트로그램 변환, 노이즈 처리, 데이터 증강
+- `src/model` — CNN/CRNN 음향 분류·이벤트 탐지 모델
+- `src/inference` — 실시간 탐지·경보 판정
+- `service` — FastAPI 백엔드 + 경보 대시보드
 - `configs` — 설정(yaml)
 - `models` — 학습된 가중치 (git 제외)
 
 ## 환경 구축
 ```bash
 conda env create -f environment.yml
-conda activate nk-radar
-python -c "import torch; print('CUDA:', torch.cuda.is_available())"
+conda activate gop-acoustic
+python -c "import torch, torchaudio; print('CUDA:', torch.cuda.is_available())"
 ```
 
-## 데이터 출처
-- GK-2A 위성: 국가기상위성센터 / 기상자료개방포털
-- 레이더 합성(정답): 기상자료개방포털 (CAPPI/HSR)
-- 낙뢰: 기상자료개방포털
-- GPM/IMERG(검증): NASA GES DISC
-- DEM: Copernicus / SRTM
+## 데이터 출처(후보)
+- 공개 환경음/이벤트: AudioSet, ESC-50, UrbanSound8K, DCASE(SED) 데이터셋
+- 총성·차량 등 특수음: 공개 데이터셋 + 자체 녹음
+- ※ 군 특수 음향은 비공개 → 공개 유사음으로 학습 후 자체 데이터로 보정
 
 ## 진행 단계
-1. [ ] 데이터 수집 파이프라인
-2. [ ] 격자 정합 + 학습셋 구축
-3. [ ] U-Net 베이스라인
-4. [ ] nowcasting 고도화
-5. [ ] 검증(접경/GPM/사례)
-6. [ ] 위험 감시 로직 + 대시보드 + 배포
+1. [ ] 음향 데이터 수집 파이프라인
+2. [ ] 전처리(멜-스펙트로그램) + 데이터 증강
+3. [ ] CNN 베이스라인 분류기
+4. [ ] CRNN/SED 고도화(연속 스트림 이벤트 탐지)
+5. [ ] 검증(혼동행렬·오경보율 FAR·탐지율)
+6. [ ] 실시간 추론 + 경보 대시보드 + 배포
