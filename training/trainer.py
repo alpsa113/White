@@ -1,0 +1,303 @@
+"""
+Trainer — 학습 루프 (Phase 1·2·3 공통)
+
+기능:
+  - 페이즈별 PhaseScheduler 로 모델 플래그 자동 전환
+  - 단독/페어 배치에 따른 gradient 제어
+  - 체크포인트 저장 / 재개
+  - 기본 validation 루프
+"""
+
+import os
+import time
+import logging
+from pathlib import Path
+
+import torch
+import torch.nn as nn
+from torch.utils.data import DataLoader
+
+from .losses import DualYOLOLoss
+from .metrics import MeanAveragePrecision, decode_detections
+from .phases import PhaseConfig, PhaseScheduler, build_optimizer, build_scheduler, PHASE_DEFAULTS
+
+logger = logging.getLogger(__name__)
+
+
+class Trainer:
+    def __init__(
+        self,
+        model: nn.Module,
+        train_loader: DataLoader,
+        val_loader: DataLoader | None,
+        phase: int,
+        cfg: PhaseConfig | None = None,
+        save_dir: str = "checkpoints",
+        device: str | None = None,
+        amp: bool = True,
+        grad_accum_steps: int = 1,
+    ):
+        self.model = model
+        self.train_loader = train_loader
+        self.val_loader = val_loader
+        self.phase = phase
+        self.cfg = cfg or PHASE_DEFAULTS[phase]
+        self.save_dir = Path(save_dir) / f"phase{phase}"
+        self.save_dir.mkdir(parents=True, exist_ok=True)
+        self.amp = amp
+        self.grad_accum_steps = max(1, grad_accum_steps)
+
+        # device
+        if device is None:
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+        self.device = torch.device(device)
+        self.model.to(self.device)
+
+        # optimizer + scheduler
+        self.optimizer = build_optimizer(model, phase)
+        self.lr_scheduler = build_scheduler(self.optimizer, self.cfg.max_epochs)
+
+        # phase scheduler (flag 관리)
+        self.phase_sched = PhaseScheduler(
+            model,
+            phase,
+            self.cfg,
+            optimizer=self.optimizer,
+            lr_scheduler=self.lr_scheduler,
+        )
+
+        # loss
+        class_weights = torch.tensor(self.cfg.class_weights, device=self.device)
+        loss_kwargs: dict = {"class_weights": class_weights}
+        if self.cfg.aux_weight is not None:
+            loss_kwargs["aux_weight"] = self.cfg.aux_weight
+        if self.cfg.fus_reg_weight is not None:
+            loss_kwargs["fus_reg_weight"] = self.cfg.fus_reg_weight
+        self.criterion = DualYOLOLoss(**loss_kwargs).to(self.device)
+
+        self.scaler = torch.cuda.amp.GradScaler(enabled=amp and self.device.type == "cuda")
+        self.start_epoch = 0
+        self.best_val_loss = float("inf")
+        self.best_map50 = 0.0
+
+    # ------------------------------------------------------------------
+    def load_checkpoint(self, ckpt_path: str):
+        ckpt = torch.load(ckpt_path, map_location=self.device)
+        self.model.load_state_dict(ckpt["model"])
+        self.optimizer.load_state_dict(ckpt["optimizer"])
+        if "scheduler" in ckpt:
+            self.lr_scheduler.load_state_dict(ckpt["scheduler"])
+        if "scaler" in ckpt:
+            self.scaler.load_state_dict(ckpt["scaler"])
+        self.start_epoch = ckpt.get("epoch", 0) + 1
+        self.phase_sched.restore_for_epoch(self.start_epoch)
+        self.best_val_loss = ckpt.get("best_val_loss", float("inf"))
+        self.best_map50 = ckpt.get("best_map50", 0.0)
+        logger.info(f"Resumed from {ckpt_path}, epoch {self.start_epoch}")
+
+    def save_checkpoint(
+        self,
+        epoch: int,
+        val_loss: float,
+        map50: float = 0.0,
+        name: str | None = None,
+    ):
+        tag = name or f"epoch_{epoch:03d}"
+        path = self.save_dir / f"{tag}.pt"
+        torch.save({
+            "epoch": epoch,
+            "model": self.model.state_dict(),
+            "optimizer": self.optimizer.state_dict(),
+            "scheduler": self.lr_scheduler.state_dict(),
+            "scaler": self.scaler.state_dict(),
+            "best_val_loss": self.best_val_loss,
+            "best_map50": self.best_map50,
+            "val_loss": val_loss,
+            "map50": map50,
+            "phase": self.phase,
+        }, path)
+        logger.info(f"Saved checkpoint → {path}")
+
+    # ------------------------------------------------------------------
+    def _to_device(self, batch: dict) -> dict:
+        out = {}
+        for k, v in batch.items():
+            if isinstance(v, torch.Tensor):
+                out[k] = v.to(self.device)
+            elif isinstance(v, list):
+                out[k] = [
+                    x.to(self.device) if isinstance(x, torch.Tensor) else x
+                    for x in v
+                ]
+            else:
+                out[k] = v
+        return out
+
+    def _forward_losses(self, batch: dict) -> dict[str, torch.Tensor]:
+        batch = self._to_device(batch)
+
+        rgb     = batch.get("rgb")          # [B,3,H,W] or None
+        thermal = batch.get("thermal")      # [B,1,H,W] or None
+        cond    = batch["cond_vec"]          # [B,3]
+        gt_boxes  = batch["boxes"]           # list[Tensor[N,4]]
+        gt_labels = batch["labels"]          # list[Tensor[N]]
+
+        # Modality dropout (Phase 1)
+        p_drop = self.cfg.modality_dropout_prob
+        if p_drop > 0:
+            drop_rgb = rgb is not None and torch.rand(1).item() < p_drop
+            drop_thm = thermal is not None and torch.rand(1).item() < p_drop
+            if drop_rgb and drop_thm:
+                if torch.rand(1).item() < 0.5:
+                    drop_rgb = False
+                else:
+                    drop_thm = False
+            if drop_rgb:
+                rgb = None
+            if drop_thm:
+                thermal = None
+
+        # 단독 모달 배치: 해당 백본만 gradient 활성화
+        rgb_only = (rgb is not None and thermal is None)
+        thm_only = (thermal is not None and rgb is None)
+
+        with torch.cuda.amp.autocast(enabled=self.amp and self.device.type == "cuda"):
+            out = self.model(rgb, thermal, cond)
+
+            # 단독 모달에서는 존재하는 backbone의 aux loss만 계산
+            aux_labels_rgb = batch.get("aux_label") if not thm_only else None
+            aux_labels_thm = batch.get("aux_label") if not rgb_only else None
+
+            losses = self.criterion(
+                out,
+                gt_boxes,
+                gt_labels,
+                aux_labels_rgb=aux_labels_rgb,
+                aux_labels_thm=aux_labels_thm,
+                cond_vec=cond,
+                aux_active=self.model.aux_active,
+                uncertainty_active=self.model.uncertainty_active,
+                fusion_reg_active=self.phase_sched.fusion_reg_active,
+            )
+
+        return losses
+
+    @torch.no_grad()
+    def _val_epoch(self) -> dict[str, float]:
+        self.model.eval()
+        total_loss = 0.0
+        n = 0
+        metric = MeanAveragePrecision(num_classes=4, iou_thresh=0.5)
+        for batch in self.val_loader:
+            batch = self._to_device(batch)
+            rgb     = batch.get("rgb")
+            thermal = batch.get("thermal")
+            cond    = batch["cond_vec"]
+            gt_boxes  = batch["boxes"]
+            gt_labels = batch["labels"]
+
+            out = self.model(rgb, thermal, cond)
+            losses = self.criterion(
+                out, gt_boxes, gt_labels,
+                aux_labels_rgb=batch.get("aux_label"),
+                aux_labels_thm=batch.get("aux_label"),
+                cond_vec=cond,
+                aux_active=self.model.aux_active,
+                uncertainty_active=self.model.uncertainty_active,
+                fusion_reg_active=self.phase_sched.fusion_reg_active,
+            )
+            total_loss += losses["total"].item()
+            preds = decode_detections(out)
+            metric.update(preds, gt_boxes, gt_labels)
+            n += 1
+        self.model.train()
+        metrics = metric.compute()
+        metrics["val_loss"] = total_loss / max(n, 1)
+        return metrics
+
+    # ------------------------------------------------------------------
+    def train(self):
+        logger.info(
+            f"=== Phase {self.phase} training start "
+            f"(epochs {self.start_epoch}~{self.cfg.max_epochs - 1}) ==="
+        )
+        self.model.train()
+        last_val_loss = float("inf")
+        last_map50 = 0.0
+        has_best = self.best_val_loss < float("inf")
+
+        for epoch in range(self.start_epoch, self.cfg.max_epochs):
+            self.phase_sched.step(epoch)
+
+            epoch_losses: dict[str, float] = {}
+            t0 = time.time()
+            self.optimizer.zero_grad(set_to_none=True)
+
+            for step, batch in enumerate(self.train_loader):
+                losses = self._forward_losses(batch)
+                scaled_total = losses["total"] / self.grad_accum_steps
+                self.scaler.scale(scaled_total).backward()
+
+                should_step = (
+                    (step + 1) % self.grad_accum_steps == 0
+                    or (step + 1) == len(self.train_loader)
+                )
+                if should_step:
+                    self.scaler.unscale_(self.optimizer)
+                    torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=10.0)
+                    self.scaler.step(self.optimizer)
+                    self.scaler.update()
+                    self.optimizer.zero_grad(set_to_none=True)
+
+                step_losses = {k: v.item() for k, v in losses.items()}
+                for k, v in step_losses.items():
+                    epoch_losses[k] = epoch_losses.get(k, 0.0) + v
+
+            n_steps = len(self.train_loader)
+            avg = {k: v / n_steps for k, v in epoch_losses.items()}
+            elapsed = time.time() - t0
+
+            log_str = (
+                f"Phase {self.phase} | Epoch {epoch:03d} | "
+                + " | ".join(f"{k}={v:.4f}" for k, v in avg.items())
+                + f" | {elapsed:.1f}s"
+            )
+            logger.info(log_str)
+            print(log_str)
+
+            self.lr_scheduler.step()
+
+            # Validation
+            val_loss = float("inf")
+            map50 = 0.0
+            if self.val_loader is not None:
+                val_metrics = self._val_epoch()
+                val_loss = val_metrics["val_loss"]
+                map50 = val_metrics["mAP50"]
+                metric_str = " | ".join(
+                    f"{k}={v:.4f}" for k, v in val_metrics.items() if v == v
+                )
+                logger.info(f"  {metric_str}")
+                print(f"  {metric_str}")
+
+            last_val_loss = val_loss
+            last_map50 = map50
+
+            if self.val_loader is not None and (not has_best or map50 > self.best_map50):
+                self.best_map50 = map50
+                self.best_val_loss = val_loss
+                has_best = True
+                self.save_checkpoint(epoch, val_loss, map50, "best")
+
+            # 주기 저장
+            if (epoch + 1) % 5 == 0:
+                self.save_checkpoint(epoch, val_loss, map50)
+
+        # 최종 저장
+        self.save_checkpoint(
+            self.cfg.max_epochs - 1,
+            last_val_loss,
+            last_map50,
+            "final",
+        )
+        logger.info(f"Phase {self.phase} training complete.")
