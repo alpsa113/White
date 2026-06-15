@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import copy
 from pathlib import Path
+import sys
 from typing import Any
 
 import torch
@@ -189,6 +190,10 @@ class DualBackbone(nn.Module):
                 "thm_pretrained to be true."
             )
 
+        provider_code = cfg.get("provider_code")
+        if provider_code:
+            _add_provider_code_to_path(provider_code)
+
         weights = cfg.get("weights")
         if not weights:
             raise ValueError("configs/model.yaml must set model.backbone.weights.")
@@ -242,6 +247,21 @@ def _load_yolo26_model(weights: str | Path) -> nn.Module:
         )
 
     raise ValueError(f"Unsupported YOLO26 checkpoint type: {type(checkpoint)!r}")
+
+
+def _add_provider_code_to_path(provider_code: str | Path):
+    path = Path(provider_code).expanduser()
+    if not path.is_absolute():
+        path = Path(__file__).resolve().parents[1] / path
+    if not path.exists():
+        raise FileNotFoundError(
+            f"YOLO26 provider_code path not found: {path}. "
+            "Set model.backbone.provider_code to the directory containing the "
+            "YOLO26 provider package."
+        )
+    path_str = str(path)
+    if path_str not in sys.path:
+        sys.path.insert(0, path_str)
 
 
 def _extract_layer_list(model: nn.Module) -> nn.ModuleList | nn.Sequential:

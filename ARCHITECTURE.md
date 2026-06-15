@@ -112,7 +112,8 @@
 
 **YOLO26-M 백본 실행 원칙:**
 - 백본은 `provider=local_checkpoint`로 지정한 PyTorch training checkpoint에서 로드한다.
-- YOLO26 provider 코드는 repo 내부 `vendor/yolo26/`에 고정해 Colab과 로컬에서 같은 모델 클래스를 import한다.
+- YOLO26 provider 코드는 공식 Ultralytics 소스를 repo 내부 `vendor/yolo26/`에 고정해 Colab과 로컬에서 같은 모델 클래스를 import한다.
+- Ultralytics provider 코드는 AGPL-3.0 라이선스를 따르며, 라이선스 전문은 `vendor/yolo26/LICENSE`를 기준으로 확인한다.
 - Colab 기준 기본 경로는 `/content/drive/MyDrive/dual_yolo/weights/yolo26m-coco.pt`이다.
 - checkpoint는 내부 layer graph에 접근 가능한 `nn.Module`을 `model` 또는 `ema` 키로 포함해야 한다.
 - `nn.Module` checkpoint 로드를 위해 checkpoint를 생성한 YOLO26 모델 코드/패키지가 Colab 런타임에서 import 가능해야 한다.

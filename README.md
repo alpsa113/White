@@ -13,7 +13,7 @@ fine-tuning의 3단계로 구성됩니다.
 - 학습/검증 데이터는 사전 생성한 manifest split을 기준으로 로드합니다.
 - 검증 루프는 mAP@0.5를 계산하고 best/final checkpoint를 저장합니다.
 - synthetic 데이터와 tiny test checkpoint 기반 로컬 smoke test를 통과했습니다.
-- 실제 학습에는 아직 실제 YOLO26 provider 코드, `yolo26m-coco.pt`, 실제 manifest 데이터가 필요합니다.
+- 실제 학습에는 아직 `yolo26m-coco.pt`와 실제 manifest 데이터가 필요합니다. YOLO26 provider 코드는 `vendor/yolo26/`에 공식 Ultralytics 소스로 포함되어 있습니다.
 
 ## 디렉터리 구조
 
@@ -27,7 +27,7 @@ model/                           # DualYOLO, backbone, fusion, FPN, head
 tools/
   build_manifest_splits.py       # phase별 train/val manifest 생성 도구
 training/                        # loss, metric, trainer, phase scheduler
-vendor/yolo26/                   # YOLO26 provider 코드 위치
+vendor/yolo26/                   # 공식 Ultralytics YOLO26 provider 코드
 weights/                         # weight 안내 파일만 포함, 대용량 weight는 Git 제외
 ```
 
@@ -46,6 +46,14 @@ opencv-python
 albumentations
 numpy
 pyyaml
+pillow
+matplotlib
+requests
+scipy
+psutil
+polars
+nvidia-ml-py
+ultralytics-thop
 ```
 
 ## 외부 준비물
@@ -54,14 +62,16 @@ pyyaml
 
 ### YOLO26 Provider 코드
 
-`yolo26m-coco.pt`를 생성한 YOLO26 모델 정의 코드를 아래 위치에 둡니다.
+YOLO26 provider 코드는 공식 Ultralytics 소스를 vendor 형태로 포함합니다.
 
 ```text
-vendor/yolo26/
+vendor/yolo26/ultralytics/
+vendor/yolo26/LICENSE
 ```
 
 조건:
 
+- Ultralytics provider 코드는 AGPL-3.0 라이선스를 따릅니다. 라이선스 전문은 `vendor/yolo26/LICENSE`를 확인합니다.
 - checkpoint에 들어있는 Python 모델 클래스가 런타임에서 import 가능해야 합니다.
 - 로드된 모델은 layer graph를 `model.model`로 노출해야 합니다.
 - `model.model`은 `nn.ModuleList` 또는 `nn.Sequential`이어야 합니다.
