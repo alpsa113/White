@@ -14,7 +14,7 @@ model:
     c3_layer: auto
     c4_layer: auto
     input_size: 640
-    expected_c3_channels: 256
+    expected_c3_channels: 512
     expected_c4_channels: 512
     strict_shapes: true
 
