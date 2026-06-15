@@ -47,17 +47,17 @@ class Trainer:
         self.amp = amp
         self.grad_accum_steps = max(1, grad_accum_steps)
 
-        # device
+        # 학습 장치
         if device is None:
             device = "cuda" if torch.cuda.is_available() else "cpu"
         self.device = torch.device(device)
         self.model.to(self.device)
 
-        # optimizer + scheduler
+        # optimizer와 학습률 스케줄러
         self.optimizer = build_optimizer(model, phase)
         self.lr_scheduler = build_scheduler(self.optimizer, self.cfg.max_epochs)
 
-        # phase scheduler (flag 관리)
+        # 페이즈 스케줄러(flag 관리)
         self.phase_sched = PhaseScheduler(
             model,
             phase,
@@ -66,7 +66,7 @@ class Trainer:
             lr_scheduler=self.lr_scheduler,
         )
 
-        # loss
+        # 손실 함수
         class_weights = torch.tensor(self.cfg.class_weights, device=self.device)
         loss_kwargs: dict = {"class_weights": class_weights}
         if self.cfg.aux_weight is not None:
@@ -93,7 +93,7 @@ class Trainer:
         self.phase_sched.restore_for_epoch(self.start_epoch)
         self.best_val_loss = ckpt.get("best_val_loss", float("inf"))
         self.best_map50 = ckpt.get("best_map50", 0.0)
-        logger.info(f"Resumed from {ckpt_path}, epoch {self.start_epoch}")
+        logger.info(f"{ckpt_path}에서 재개했습니다. 시작 에폭: {self.start_epoch}")
 
     def save_checkpoint(
         self,
@@ -116,7 +116,7 @@ class Trainer:
             "map50": map50,
             "phase": self.phase,
         }, path)
-        logger.info(f"Saved checkpoint → {path}")
+        logger.info(f"체크포인트 저장 완료 → {path}")
 
     # ------------------------------------------------------------------
     def _to_device(self, batch: dict) -> dict:
@@ -136,13 +136,13 @@ class Trainer:
     def _forward_losses(self, batch: dict) -> dict[str, torch.Tensor]:
         batch = self._to_device(batch)
 
-        rgb     = batch.get("rgb")          # [B,3,H,W] or None
-        thermal = batch.get("thermal")      # [B,1,H,W] or None
+        rgb     = batch.get("rgb")          # [B,3,H,W] 또는 None
+        thermal = batch.get("thermal")      # [B,1,H,W] 또는 None
         cond    = batch["cond_vec"]          # [B,3]
-        gt_boxes  = batch["boxes"]           # list[Tensor[N,4]]
-        gt_labels = batch["labels"]          # list[Tensor[N]]
+        gt_boxes  = batch["boxes"]           # Tensor[N,4] 리스트
+        gt_labels = batch["labels"]          # Tensor[N] 리스트
 
-        # Modality dropout (Phase 1)
+        # 모달리티 dropout(1단계)
         p_drop = self.cfg.modality_dropout_prob
         if p_drop > 0:
             drop_rgb = rgb is not None and torch.rand(1).item() < p_drop
@@ -164,7 +164,7 @@ class Trainer:
         with torch.cuda.amp.autocast(enabled=self.amp and self.device.type == "cuda"):
             out = self.model(rgb, thermal, cond)
 
-            # 단독 모달에서는 존재하는 backbone의 aux loss만 계산
+            # 단독 모달에서는 존재하는 백본의 보조 손실만 계산
             aux_labels_rgb = batch.get("aux_label") if not thm_only else None
             aux_labels_thm = batch.get("aux_label") if not rgb_only else None
 
@@ -218,8 +218,8 @@ class Trainer:
     # ------------------------------------------------------------------
     def train(self):
         logger.info(
-            f"=== Phase {self.phase} training start "
-            f"(epochs {self.start_epoch}~{self.cfg.max_epochs - 1}) ==="
+            f"=== {self.phase}단계 학습 시작 "
+            f"(에폭 {self.start_epoch}~{self.cfg.max_epochs - 1}) ==="
         )
         self.model.train()
         last_val_loss = float("inf")
@@ -258,7 +258,7 @@ class Trainer:
             elapsed = time.time() - t0
 
             log_str = (
-                f"Phase {self.phase} | Epoch {epoch:03d} | "
+                f"{self.phase}단계 | 에폭 {epoch:03d} | "
                 + " | ".join(f"{k}={v:.4f}" for k, v in avg.items())
                 + f" | {elapsed:.1f}s"
             )
@@ -267,7 +267,7 @@ class Trainer:
 
             self.lr_scheduler.step()
 
-            # Validation
+            # 검증
             val_loss = float("inf")
             map50 = 0.0
             if self.val_loader is not None:
@@ -300,4 +300,4 @@ class Trainer:
             last_map50,
             "final",
         )
-        logger.info(f"Phase {self.phase} training complete.")
+        logger.info(f"{self.phase}단계 학습이 완료되었습니다.")

@@ -32,7 +32,7 @@ def _write_manifest(path: Path, samples: list[dict]):
 def _print_counter(title: str, counter: dict, denominator: int):
     print(f"  {title}:")
     if not counter:
-        print("    (none)")
+        print("    (없음)")
         return
     for key, value in sorted(counter.items(), key=lambda kv: (-kv[1], str(kv[0]))):
         pct = value / max(denominator, 1) * 100.0
@@ -63,13 +63,13 @@ def _summarize_manifest(name: str, samples: list[dict]):
             by_tag[tag] += 1
 
     total_boxes = sum(by_class.values())
-    print(f"\n{name}: total_images={len(samples)}")
-    _print_counter("by_source", by_source, len(samples))
-    _print_counter("by_modality", by_modality, len(samples))
-    _print_counter("by_class_boxes", by_class, max(total_boxes, 1))
+    print(f"\n{name}: 전체 이미지 수={len(samples)}")
+    _print_counter("source별 분포", by_source, len(samples))
+    _print_counter("모달리티별 분포", by_modality, len(samples))
+    _print_counter("클래스별 box 분포", by_class, max(total_boxes, 1))
     empty_pct = empty_images / max(len(samples), 1) * 100.0
-    print(f"  empty_images: {empty_images} ({empty_pct:.1f}%)")
-    _print_counter("by_tag", by_tag, len(samples))
+    print(f"  빈 라벨 이미지: {empty_images} ({empty_pct:.1f}%)")
+    _print_counter("tag별 분포", by_tag, len(samples))
 
 
 def _as_path(root: Path, value: str | None) -> str | None:
@@ -214,7 +214,7 @@ def _load_manifest_source(src: dict) -> list[dict]:
 
 def _load_yolo_source(src: dict) -> list[dict]:
     if cv2 is None:
-        raise RuntimeError("YOLO source split requires opencv-python to read image size")
+        raise RuntimeError("YOLO 소스 split은 이미지 크기를 읽기 위해 opencv-python이 필요합니다")
 
     root = Path(src.get("root", "."))
     ann_file = Path(src["ann_file"])
@@ -337,7 +337,7 @@ def build_splits(config: dict):
 
         _write_manifest(output_dir / f"{phase_name}_train.json", train_all)
         _write_manifest(output_dir / f"{phase_name}_val.json", val_all)
-        print(f"{phase_name}: train={len(train_all)} val={len(val_all)}")
+        print(f"{phase_name}: 학습={len(train_all)} 검증={len(val_all)}")
         _summarize_manifest(f"{phase_name} train", train_all)
         _summarize_manifest(f"{phase_name} val", val_all)
 

@@ -1,9 +1,9 @@
 """
 손실 함수 모음
 
-1. detection_loss    — focal cls + CIoU reg + BCE obj
-2. aux_loss          — CrossEntropy (보조 분류 헤드)
-3. uncertainty_loss  — heteroscedastic NLL (Kendall & Gal 2017)
+1. detection_loss    — focal 분류 + CIoU 회귀 + BCE 객체성
+2. aux_loss          — CrossEntropy(보조 분류 헤드)
+3. uncertainty_loss  — heteroscedastic NLL(Kendall & Gal 2017)
 4. fusion_reg_loss   — 야간 조건에서 열화상 가중치 하한 유도
 
 DualYOLOLoss: 위 손실들을 페이즈 설정에 따라 합산.
@@ -15,8 +15,8 @@ import torch.nn.functional as F
 
 
 def focal_loss(
-    pred: torch.Tensor,   # [N, C] logits
-    target: torch.Tensor, # [N, C] one-hot
+    pred: torch.Tensor,   # [N, C] 로짓
+    target: torch.Tensor, # [N, C] one-hot 라벨
     alpha: float = 0.25,
     gamma: float = 2.0,
     class_weights: torch.Tensor | None = None,
@@ -36,7 +36,7 @@ def _decode_pos_boxes(
     grid_y: torch.Tensor,
     stride: int,
 ) -> torch.Tensor:
-    """Positive 위치의 (cx_rel, cy_rel, log_w, log_h)를 절대 xyxy로 decode."""
+    """양성 위치의 (cx_rel, cy_rel, log_w, log_h)를 절대 xyxy로 decode."""
     cx = (grid_x.float() + reg[:, 0]) * stride
     cy = (grid_y.float() + reg[:, 1]) * stride
     w = reg[:, 2].clamp(-4, 4).exp() * stride
@@ -48,7 +48,7 @@ def _decode_pos_boxes(
 
 
 def ciou_per_box(pred_boxes: torch.Tensor, gt_boxes: torch.Tensor) -> torch.Tensor:
-    """Aligned CIoU for xyxy boxes. Returns [N] loss values."""
+    """xyxy box용 정렬 CIoU. [N] 형태의 손실 값을 반환."""
     eps = 1e-7
     px1, py1, px2, py2 = pred_boxes.unbind(dim=1)
     gx1, gy1, gx2, gy2 = gt_boxes.unbind(dim=1)
@@ -88,11 +88,11 @@ def ciou_per_box(pred_boxes: torch.Tensor, gt_boxes: torch.Tensor) -> torch.Tens
 
 
 # ---------------------------------------------------------------------------
-# Detection Loss
+# 탐지 손실
 # ---------------------------------------------------------------------------
 
 class DetectionLoss(nn.Module):
-    """단일 스케일 anchor-free detection loss.
+    """단일 스케일 anchor-free 탐지 손실.
 
     타겟 매칭: SimOTA 대신 간소화된 center-based 매칭 사용.
     """
@@ -120,12 +120,12 @@ class DetectionLoss(nn.Module):
 
     def _assign_targets(
         self,
-        gt_boxes: list[torch.Tensor],  # list[N_i × 4] xyxy
-        gt_labels: list[torch.Tensor], # list[N_i]
+        gt_boxes: list[torch.Tensor],  # [N_i × 4] xyxy tensor 리스트
+        gt_labels: list[torch.Tensor], # [N_i] tensor 리스트
         H: int, W: int,
         device: torch.device,
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        """Center-point 기반 간단한 타겟 할당.
+        """중심점 기반 간단한 타겟 할당.
 
         Returns:
             obj_mask:  [B, H, W] bool
@@ -178,7 +178,7 @@ class DetectionLoss(nn.Module):
             gt_boxes, gt_labels, H, W, device
         )
 
-        # --- objectness loss (전체 위치) ---
+        # --- 객체성 손실(전체 위치) ---
         obj_tgt = obj_mask.float().unsqueeze(1)  # [B, 1, H, W]
         loss_obj = F.binary_cross_entropy_with_logits(
             obj_p, obj_tgt, pos_weight=torch.tensor(5.0, device=device)
@@ -186,7 +186,7 @@ class DetectionLoss(nn.Module):
 
         n_pos = obj_mask.sum().clamp(min=1)
 
-        # --- cls loss (positive 위치만) ---
+        # --- 분류 손실(양성 위치만) ---
         cls_p_pos = cls_p.permute(0, 2, 3, 1)[obj_mask]   # [N, C]
         cls_tgt_pos = cls_tgt[obj_mask]                    # [N, C]
         if cls_p_pos.numel() > 0:
@@ -203,7 +203,7 @@ class DetectionLoss(nn.Module):
         else:
             loss_cls = torch.tensor(0.0, device=device)
 
-        # --- reg loss (positive 위치만) ---
+        # --- 회귀 손실(양성 위치만) ---
         reg_p_pos = reg_p.permute(0, 2, 3, 1)[obj_mask]   # [N, 4]
         reg_tgt_pos = reg_tgt[obj_mask]                    # [N, 4]
         if reg_p_pos.numel() > 0:
@@ -229,12 +229,12 @@ class DetectionLoss(nn.Module):
 
 
 # ---------------------------------------------------------------------------
-# Aux Loss
+# 보조 손실
 # ---------------------------------------------------------------------------
 
 def aux_loss(
     pred: torch.Tensor,    # [B, 3]
-    labels: torch.Tensor,  # [B] — 이미지/패치 레벨 dominant label
+    labels: torch.Tensor,  # [B] — 이미지/패치 레벨 대표 라벨
 ) -> torch.Tensor:
     valid = labels >= 0
     if valid.sum() == 0:
@@ -243,7 +243,7 @@ def aux_loss(
 
 
 # ---------------------------------------------------------------------------
-# Fusion Regularization Loss
+# 융합 정규화 손실
 # ---------------------------------------------------------------------------
 
 def fusion_reg_loss(
@@ -270,7 +270,7 @@ def fusion_reg_loss(
 
 
 # ---------------------------------------------------------------------------
-# Main Loss Aggregator
+# 전체 손실 통합기
 # ---------------------------------------------------------------------------
 
 class DualYOLOLoss(nn.Module):
@@ -320,7 +320,7 @@ class DualYOLOLoss(nn.Module):
         total = torch.tensor(0.0, device=cond_vec.device)
         losses: dict[str, torch.Tensor] = {}
 
-        # ── Detection Loss (P3 + P4) ──────────────────────────────
+        # ── 탐지 손실(P3 + P4) ──────────────────────────────────
         for scale, det_loss_fn in self.det_losses.items():
             pred = detections[scale]
             lv_cls = pred.get("log_var_cls") if uncertainty_active else None
@@ -332,7 +332,7 @@ class DualYOLOLoss(nn.Module):
                 losses[key] = v
                 total = total + v
 
-        # ── Aux Loss ─────────────────────────────────────────────
+        # ── 보조 손실 ───────────────────────────────────────────
         if aux_active:
             if model_out["aux_rgb"] is not None and aux_labels_rgb is not None:
                 l_aux_rgb = aux_loss(model_out["aux_rgb"], aux_labels_rgb)
@@ -344,7 +344,7 @@ class DualYOLOLoss(nn.Module):
                 losses["aux_thm"] = l_aux_thm
                 total = total + self.aux_w * l_aux_thm
 
-        # ── Fusion Regularization ─────────────────────────────────
+        # ── 융합 정규화 ─────────────────────────────────────────
         if fusion_reg_active:
             l_fus = fusion_reg_loss(fw["beta_c3"], fw["beta_c4"], cond_vec)
             losses["fusion_reg"] = l_fus

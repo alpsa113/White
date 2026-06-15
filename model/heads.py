@@ -1,9 +1,9 @@
 """
-Detection Heads
+탐지 헤드 모음
 
 1. YOLODetectionHead  — anchor-free, 클래스별 분류 + bbox 회귀 + objectness
-2. AuxHead            — 단일 백본 피처에서 보조 분류 (Phase 1·2 활성)
-3. UncertaintyHead    — aleatoric 불확실성 추정 (Phase 2 후반~3 활성)
+2. AuxHead            — 단일 백본 피처에서 보조 분류(1·2단계 활성)
+3. UncertaintyHead    — 데이터 자체 노이즈 기반 불확실성 추정(2단계 후반~3단계 활성)
 
 클래스: 0=person, 1=boar, 2=deer, 3=non_target
 """
@@ -12,7 +12,7 @@ import torch
 import torch.nn as nn
 
 
-NUM_CLASSES = 4  # person / boar / deer / non_target
+NUM_CLASSES = 4  # person / boar / deer / non_target 네 클래스
 
 
 def _conv_bn_act(in_ch: int, out_ch: int, act: bool = True) -> nn.Sequential:
@@ -27,7 +27,7 @@ def _conv_bn_act(in_ch: int, out_ch: int, act: bool = True) -> nn.Sequential:
 
 # ---------------------------------------------------------------------------
 class YOLODetectionHead(nn.Module):
-    """Decoupled anchor-free detection head (YOLOX 스타일).
+    """분리형 anchor-free 탐지 헤드(YOLOX 스타일).
 
     각 스케일 피처에서 독립적으로 적용.
     출력:
@@ -40,21 +40,21 @@ class YOLODetectionHead(nn.Module):
         super().__init__()
         self.num_classes = num_classes
 
-        # cls branch
+        # 분류 브랜치
         self.cls_stem = nn.Sequential(
             _conv_bn_act(in_channels, in_channels),
             _conv_bn_act(in_channels, in_channels),
         )
         self.cls_pred = nn.Conv2d(in_channels, num_classes, 1)
 
-        # reg branch
+        # 박스 회귀 브랜치
         self.reg_stem = nn.Sequential(
             _conv_bn_act(in_channels, in_channels),
             _conv_bn_act(in_channels, in_channels),
         )
         self.reg_pred = nn.Conv2d(in_channels, 4, 1)
 
-        # obj branch
+        # 객체성 브랜치
         self.obj_pred = nn.Conv2d(in_channels, 1, 1)
 
         self._init_weights()
@@ -86,7 +86,7 @@ class AuxHead(nn.Module):
     """
 
     def __init__(self, in_channels: int, num_classes: int = NUM_CLASSES - 1):
-        """num_classes: non_target 제외 (person/boar/deer = 3)."""
+        """num_classes: non_target 제외(person/boar/deer = 3)."""
         super().__init__()
         self.gap = nn.AdaptiveAvgPool2d(1)
         self.head = nn.Sequential(
@@ -98,15 +98,15 @@ class AuxHead(nn.Module):
         )
 
     def forward(self, feat: torch.Tensor) -> torch.Tensor:
-        """Args: feat [B, C, H, W] → [B, num_classes]."""
+        """입력 특징맵 [B, C, H, W]를 [B, num_classes] 로짓으로 변환."""
         return self.head(self.gap(feat))
 
 
 # ---------------------------------------------------------------------------
 class UncertaintyHead(nn.Module):
-    """Aleatoric 불확실성 추정 헤드.
+    """데이터 자체 노이즈 기반 불확실성 추정 헤드.
 
-    Detection head 와 같은 피처를 공유하고,
+    탐지 헤드와 같은 피처를 공유하고,
     각 공간 위치에서 log σ² (log-variance)를 출력.
     손실: NLL loss  ℒ = 0.5 * exp(-s) * ℒ_det + 0.5 * s
           (s = log σ²; Kendall & Gal 2017)
@@ -118,7 +118,7 @@ class UncertaintyHead(nn.Module):
             _conv_bn_act(in_channels, in_channels),
             _conv_bn_act(in_channels, in_channels // 2),
         )
-        # 분류 + 회귀 각각 log-var 출력
+        # 분류 + 회귀 각각 log variance 출력
         self.log_var_cls = nn.Conv2d(in_channels // 2, NUM_CLASSES, 1)
         self.log_var_reg = nn.Conv2d(in_channels // 2, 4, 1)
 
@@ -132,7 +132,7 @@ class UncertaintyHead(nn.Module):
 
 # ---------------------------------------------------------------------------
 class MultiScaleHeads(nn.Module):
-    """P3, P4 각 스케일에 Detection + Uncertainty Head 를 적용.
+    """P3, P4 각 스케일에 탐지 헤드와 불확실성 헤드를 적용.
 
     aux_rgb / aux_thm 은 외부에서 직접 호출 (backbone C4 입력).
     """
@@ -143,11 +143,11 @@ class MultiScaleHeads(nn.Module):
             scales = ["p3", "p4"]
         self.scales = scales
 
-        # detection head per scale (가중치 비공유)
+        # 스케일별 탐지 헤드(가중치 비공유)
         self.det_heads = nn.ModuleDict(
             {s: YOLODetectionHead(fpn_dim) for s in scales}
         )
-        # uncertainty head per scale
+        # 스케일별 불확실성 헤드
         self.unc_heads = nn.ModuleDict(
             {s: UncertaintyHead(fpn_dim) for s in scales}
         )
@@ -161,7 +161,7 @@ class MultiScaleHeads(nn.Module):
         Returns:
             {
               'p3': {'cls': ..., 'reg': ..., 'obj': ...,
-                     'log_var_cls': ..., 'log_var_reg': ...},  # uncertainty if active
+                     'log_var_cls': ..., 'log_var_reg': ...},  # 활성화 시 불확실성 출력
               'p4': {...},
             }
         """

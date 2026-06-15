@@ -3,30 +3,30 @@
 RGB와 열화상 영상을 함께 사용하는 GOP 경계 감시용 객체 탐지 모델입니다.
 
 모델은 RGB/열화상 각각에 YOLO26-M COCO 사전학습 백본을 사용하고,
-weather, temp_c, illuminance 조건벡터를 기반으로 adaptive middle fusion을
+`weather`, `temp_c`, `illuminance` 조건벡터를 기반으로 조건 적응형 중간 융합을
 수행합니다. 학습은 일반 환경 사전학습, 페어 데이터 융합 학습, GOP 유사 환경
-fine-tuning의 3단계로 구성됩니다.
+파인튜닝의 3단계로 구성됩니다.
 
 ## 현재 상태
 
 - 전체 아키텍처와 학습 정책은 `ARCHITECTURE.md`, `TRAINING_SCENARIO.md`에 정리되어 있습니다.
-- 학습/검증 데이터는 사전 생성한 manifest split을 기준으로 로드합니다.
+- 학습/검증 데이터는 사전 생성한 manifest 분할 파일을 기준으로 로드합니다.
 - 검증 루프는 mAP@0.5를 계산하고 best/final checkpoint를 저장합니다.
-- synthetic 데이터와 tiny test checkpoint 기반 로컬 smoke test를 통과했습니다.
-- 실제 학습에는 아직 `yolo26m-coco.pt`와 실제 manifest 데이터가 필요합니다. YOLO26 provider 코드는 `vendor/yolo26/`에 공식 Ultralytics 소스로 포함되어 있습니다.
+- YOLO26-M COCO 사전학습 weight 로드, C3/C4 추출, 모델 forward/backward 간단 검증을 통과했습니다.
+- 실제 학습에는 아직 실제 manifest 데이터가 필요합니다. YOLO26 provider 코드는 `vendor/yolo26/`에 공식 Ultralytics 소스로 포함되어 있습니다.
 
 ## 디렉터리 구조
 
 ```text
 configs/
   model.yaml                     # 모델, 백본, 학습 기본 설정
-  phases.yaml                    # phase별 학습 설정
-  splits/manifest_splits.yaml    # 원본 데이터셋 → manifest split 설정
-data/                            # 데이터셋 로더와 transform
-model/                           # DualYOLO, backbone, fusion, FPN, head
+  phases.yaml                    # 단계별 학습 설정
+  splits/manifest_splits.yaml    # 원본 데이터셋 → manifest 분할 설정
+data/                            # 데이터셋 로더와 변환
+model/                           # DualYOLO, 백본, 융합, FPN, 헤드
 tools/
-  build_manifest_splits.py       # phase별 train/val manifest 생성 도구
-training/                        # loss, metric, trainer, phase scheduler
+  build_manifest_splits.py       # 단계별 학습/검증 manifest 생성 도구
+training/                        # 손실, 지표, 학습기, 단계 스케줄러
 vendor/yolo26/                   # 공식 Ultralytics YOLO26 provider 코드
 weights/                         # weight 안내 파일만 포함, 대용량 weight는 Git 제외
 ```
@@ -62,7 +62,7 @@ ultralytics-thop
 
 ### YOLO26 Provider 코드
 
-YOLO26 provider 코드는 공식 Ultralytics 소스를 vendor 형태로 포함합니다.
+YOLO26 provider 코드는 공식 Ultralytics 소스를 repo 내부 vendor 형태로 포함합니다.
 
 ```text
 vendor/yolo26/ultralytics/
@@ -73,7 +73,7 @@ vendor/yolo26/LICENSE
 
 - Ultralytics provider 코드는 AGPL-3.0 라이선스를 따릅니다. 라이선스 전문은 `vendor/yolo26/LICENSE`를 확인합니다.
 - checkpoint에 들어있는 Python 모델 클래스가 런타임에서 import 가능해야 합니다.
-- 로드된 모델은 layer graph를 `model.model`로 노출해야 합니다.
+- 로드된 모델은 레이어 graph를 `model.model`로 노출해야 합니다.
 - `model.model`은 `nn.ModuleList` 또는 `nn.Sequential`이어야 합니다.
 
 ### YOLO26-M COCO 사전학습 weight
@@ -86,13 +86,13 @@ Colab 기준 기본 경로:
 
 조건:
 
-- PyTorch training checkpoint여야 합니다.
+- PyTorch 학습 checkpoint여야 합니다.
 - checkpoint 내부에 `model` 또는 `ema` 키로 `nn.Module`이 들어 있어야 합니다.
-- state-dict-only, ONNX, TensorRT, TorchScript export 파일은 현재 truncated-backbone wrapper에서 지원하지 않습니다.
+- state-dict-only, ONNX, TensorRT, TorchScript export 파일은 현재 C4 절단 백본 래퍼에서 지원하지 않습니다.
 
 ## Manifest 생성
 
-학습 중 랜덤 split을 하지 않고, 사전에 생성한 manifest split을 사용합니다.
+학습 중 랜덤 분할을 하지 않고, 사전에 생성한 manifest 분할 파일을 사용합니다.
 
 먼저 `configs/splits/manifest_splits.yaml`에 원본 데이터셋 경로를 맞춘 뒤 실행합니다.
 
@@ -112,18 +112,18 @@ data/manifests/phase3_train.json
 data/manifests/phase3_val.json
 ```
 
-manifest 생성 시 source, modality, class, tag, empty image 통계가 출력됩니다.
-실제 학습 전에 이 분포를 확인해 Phase 3 데이터 비율이 정책과 크게 어긋나지 않는지 점검합니다.
+manifest 생성 시 source, 모달리티, 클래스, tag, 빈 라벨 이미지 통계가 출력됩니다.
+실제 학습 전에 이 분포를 확인해 3단계 데이터 비율이 정책과 크게 어긋나지 않는지 점검합니다.
 
 ## 학습 실행
 
-Phase 1:
+1단계:
 
 ```bash
 python train.py --phase 1 --device cuda
 ```
 
-Phase 1 best checkpoint에서 Phase 2 시작:
+1단계 best checkpoint에서 2단계 시작:
 
 ```bash
 python train.py \
@@ -132,7 +132,7 @@ python train.py \
   --device cuda
 ```
 
-Phase 2 best checkpoint에서 Phase 3 시작:
+2단계 best checkpoint에서 3단계 시작:
 
 ```bash
 python train.py \
@@ -166,7 +166,7 @@ weights/*.engine
 *.engine
 ```
 
-대용량 데이터셋, 생성된 manifest, 학습 checkpoint, pretrained weight는 Git에 올리지 않고
+대용량 데이터셋, 생성된 manifest, 학습 checkpoint, 사전학습 weight는 Git에 올리지 않고
 Google Drive 등 외부 저장소에 둡니다.
 
 ## 브랜치 작업 방식

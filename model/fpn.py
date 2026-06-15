@@ -1,7 +1,7 @@
 """
-Feature Pyramid Network (FPN)
+특징 피라미드 네트워크(FPN)
 
-융합된 {c3, c4} 피처를 받아 P3 (small), P4 (large) 를 생성.
+융합된 {c3, c4} 피처를 받아 P3(small), P4(large)를 생성.
 
     P4 = conv(c4)
     P3 = conv(upsample(P4) + c3)
@@ -23,15 +23,15 @@ def _conv_bn_relu(in_ch: int, out_ch: int, k: int = 3, p: int = 1) -> nn.Sequent
 
 
 class FPN(nn.Module):
-    """2-level FPN: P4 (stride 16) → P3 (stride 8)."""
+    """2단계 FPN: P4(stride 16) → P3(stride 8)."""
 
     def __init__(self, in_channels: int = 256, fpn_dim: int = 256):
         super().__init__()
-        # lateral projections
+        # 측면 투영
         self.lat_c4 = nn.Conv2d(in_channels, fpn_dim, 1, bias=False)
         self.lat_c3 = nn.Conv2d(in_channels, fpn_dim, 1, bias=False)
 
-        # output convs
+        # 출력 합성곱
         self.out_p4 = _conv_bn_relu(fpn_dim, fpn_dim)
         self.out_p3 = _conv_bn_relu(fpn_dim, fpn_dim)
 

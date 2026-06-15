@@ -1,8 +1,8 @@
 """
-Dual Backbone: YOLO26-M pretrained truncated feature extractors.
+Dual Backbone: YOLO26-M 사전학습 모델을 C4까지만 자른 특징 추출기.
 
-Both RGB and thermal branches execute only up to stride 16 (C4). Neck and
-detection heads are not called in the training forward path.
+RGB/열화상 브랜치는 모두 stride 16(C4)까지만 실행한다.
+학습 forward 경로에서는 YOLO26 neck과 detection head를 호출하지 않는다.
 """
 
 from __future__ import annotations
@@ -17,7 +17,7 @@ import torch.nn as nn
 
 
 class YOLO26Backbone(nn.Module):
-    """YOLO26-M detection checkpoint wrapper truncated at C4."""
+    """YOLO26-M 탐지 checkpoint를 C4까지만 사용하는 래퍼."""
 
     def __init__(
         self,
@@ -55,7 +55,7 @@ class YOLO26Backbone(nn.Module):
 
         if int(self.c3_layer) >= int(self.c4_layer):
             raise ValueError(
-                f"Invalid YOLO26 C3/C4 layer order: c3={self.c3_layer}, "
+                f"YOLO26 C3/C4 레이어 순서가 올바르지 않습니다: c3={self.c3_layer}, "
                 f"c4={self.c4_layer}"
             )
 
@@ -67,10 +67,10 @@ class YOLO26Backbone(nn.Module):
             for key, channels in expected.items():
                 if self.out_channels[key] != channels:
                     raise ValueError(
-                        f"YOLO26 {key.upper()} channels mismatch: "
-                        f"expected {channels}, got {self.out_channels[key]}. "
-                        "Set the correct checkpoint/layer indices or disable "
-                        "strict_shapes only after updating downstream modules."
+                        f"YOLO26 {key.upper()} 채널 수가 맞지 않습니다: "
+                        f"기대값 {channels}, 실제값 {self.out_channels[key]}. "
+                        "올바른 체크포인트/레이어 index를 설정하거나, 후속 모듈을 "
+                        "함께 수정한 뒤에만 strict_shapes를 비활성화하세요."
                     )
 
         self.layers = nn.ModuleList(
@@ -95,7 +95,7 @@ class YOLO26Backbone(nn.Module):
 
         if c3 is None or c4 is None:
             raise RuntimeError(
-                f"Failed to extract YOLO26 C3/C4 features "
+                f"YOLO26 C3/C4 특징맵 추출에 실패했습니다 "
                 f"(c3_layer={self.c3_layer}, c4_layer={self.c4_layer})."
             )
         return {"c3": c3, "c4": c4}
@@ -142,8 +142,8 @@ class YOLO26Backbone(nn.Module):
         missing = [key for key in ("c3_layer", "c4_layer") if key not in found]
         if missing:
             raise ValueError(
-                f"Could not infer YOLO26 feature layers from checkpoint: {missing}. "
-                "Set c3_layer/c4_layer explicitly in configs/model.yaml."
+                f"체크포인트에서 YOLO26 특징 레이어를 추론하지 못했습니다: {missing}. "
+                "configs/model.yaml에 c3_layer/c4_layer를 명시하세요."
             )
         return found
 
@@ -168,26 +168,26 @@ class YOLO26Backbone(nn.Module):
 
         self.train(training)
         if set(out_channels) != {"c3", "c4"}:
-            raise ValueError("Could not infer channels for configured C3/C4 layers.")
+            raise ValueError("설정된 C3/C4 레이어의 채널 수를 추론하지 못했습니다.")
         return out_channels
 
 
 class DualBackbone(nn.Module):
-    """RGB + thermal YOLO26-M/M truncated pretrained backbones."""
+    """RGB + 열화상 YOLO26-M/M 절단 사전학습 백본."""
 
     def __init__(self, backbone_cfg: dict | None = None):
         super().__init__()
         cfg = backbone_cfg or {}
         provider = cfg.get("provider", "local_checkpoint")
         if provider != "local_checkpoint":
-            raise ValueError(f"Unsupported YOLO26 backbone provider: {provider}")
+            raise ValueError(f"지원하지 않는 YOLO26 백본 제공자입니다: {provider}")
 
         rgb_pretrained = bool(cfg.get("rgb_pretrained", True))
         thm_pretrained = bool(cfg.get("thm_pretrained", True))
         if not rgb_pretrained or not thm_pretrained:
             raise ValueError(
-                "YOLO26-M COCO pretrained mode requires both rgb_pretrained and "
-                "thm_pretrained to be true."
+                "YOLO26-M COCO 사전학습 모드는 rgb_pretrained와 "
+                "thm_pretrained가 모두 true여야 합니다."
             )
 
         provider_code = cfg.get("provider_code")
@@ -196,7 +196,7 @@ class DualBackbone(nn.Module):
 
         weights = cfg.get("weights")
         if not weights:
-            raise ValueError("configs/model.yaml must set model.backbone.weights.")
+            raise ValueError("configs/model.yaml에 model.backbone.weights를 설정해야 합니다.")
 
         rgb_model = _load_yolo26_model(weights)
         thm_model = copy.deepcopy(rgb_model)
@@ -227,8 +227,8 @@ def _load_yolo26_model(weights: str | Path) -> nn.Module:
     path = Path(weights).expanduser()
     if not path.exists():
         raise FileNotFoundError(
-            f"YOLO26-M COCO pretrained checkpoint not found: {path}. "
-            "Mount Google Drive in Colab or update model.backbone.weights."
+            f"YOLO26-M COCO 사전학습 체크포인트를 찾지 못했습니다: {path}. "
+            "Colab에서는 Google Drive를 마운트하거나 model.backbone.weights를 수정하세요."
         )
 
     checkpoint = torch.load(path, map_location="cpu", weights_only=False)
@@ -241,12 +241,12 @@ def _load_yolo26_model(weights: str | Path) -> nn.Module:
             if isinstance(model, nn.Module):
                 return model.float()
         raise ValueError(
-            "YOLO26 checkpoint must contain an nn.Module under 'ema' or 'model'. "
-            "State-dict-only checkpoints require the matching YOLO26 model code "
-            "and are not supported by the local_checkpoint provider."
+            "YOLO26 체크포인트는 'ema' 또는 'model' 키 아래에 nn.Module을 포함해야 합니다. "
+            "state_dict만 있는 체크포인트는 매칭되는 YOLO26 모델 코드가 필요하므로 "
+            "local_checkpoint 제공자에서 지원하지 않습니다."
         )
 
-    raise ValueError(f"Unsupported YOLO26 checkpoint type: {type(checkpoint)!r}")
+    raise ValueError(f"지원하지 않는 YOLO26 체크포인트 타입입니다: {type(checkpoint)!r}")
 
 
 def _add_provider_code_to_path(provider_code: str | Path):
@@ -255,9 +255,9 @@ def _add_provider_code_to_path(provider_code: str | Path):
         path = Path(__file__).resolve().parents[1] / path
     if not path.exists():
         raise FileNotFoundError(
-            f"YOLO26 provider_code path not found: {path}. "
-            "Set model.backbone.provider_code to the directory containing the "
-            "YOLO26 provider package."
+            f"YOLO26 provider_code 경로를 찾지 못했습니다: {path}. "
+            "model.backbone.provider_code를 YOLO26 제공자 package가 들어 있는 "
+            "디렉터리로 설정하세요."
         )
     path_str = str(path)
     if path_str not in sys.path:
@@ -275,8 +275,8 @@ def _extract_layer_list(model: nn.Module) -> nn.ModuleList | nn.Sequential:
             continue
         break
     raise ValueError(
-        "YOLO26 model must expose its layer graph as model.model "
-        "(ModuleList or Sequential)."
+        "YOLO26 모델은 레이어 graph를 model.model(ModuleList 또는 Sequential)로 "
+        "노출해야 합니다."
     )
 
 
@@ -305,7 +305,7 @@ def _select_tensor(value: Any, required: bool = True) -> torch.Tensor | None:
             if tensor is not None:
                 return tensor
     if required:
-        raise TypeError(f"Expected tensor-like layer output, got {type(value)!r}")
+        raise TypeError(f"tensor 형태의 레이어 출력을 기대했지만 {type(value)!r} 값을 받았습니다.")
     return None
 
 
@@ -334,12 +334,12 @@ def _find_first_conv_parent(module: nn.Module) -> tuple[nn.Module, str, nn.Conv2
         if isinstance(child, nn.Conv2d):
             if child.in_channels != 3:
                 raise ValueError(
-                    f"Expected first YOLO26 conv to have 3 input channels, "
-                    f"got {child.in_channels}."
+                    f"YOLO26 첫 번째 conv의 입력 채널은 3이어야 하지만 "
+                    f"실제값은 {child.in_channels}입니다."
                 )
             return module, name, child
         try:
             return _find_first_conv_parent(child)
         except LookupError:
             continue
-    raise LookupError("Could not find first Conv2d in YOLO26 checkpoint model.")
+    raise LookupError("YOLO26 체크포인트 모델에서 첫 번째 Conv2d를 찾지 못했습니다.")

@@ -16,7 +16,7 @@ from .heads import AuxHead, MultiScaleHeads
 
 
 class DualYOLO(nn.Module):
-    """GOP 경계 탐지용 Dual-Backbone + Adaptive Fusion YOLO 모델.
+    """GOP 경계 탐지용 이중 백본 + 조건 적응형 융합 YOLO 모델.
 
     Args:
         fusion_dim:   Adaptive Fusion 출력 채널 수 (기본 256)
@@ -41,14 +41,14 @@ class DualYOLO(nn.Module):
         self.aux_active = aux_active
         self.uncertainty_active = uncertainty_active
 
-        # ── Backbone ──────────────────────────────────────────────
+        # ── 백본 ─────────────────────────────────────────────────
         self.backbone = DualBackbone(backbone_cfg=backbone_cfg)
         rgb_c3 = self.backbone.rgb.out_channels["c3"]
         rgb_c4 = self.backbone.rgb.out_channels["c4"]
         thm_c3 = self.backbone.thm.out_channels["c3"]
         thm_c4 = self.backbone.thm.out_channels["c4"]
 
-        # ── Adaptive Fusion ───────────────────────────────────────
+        # ── 조건 적응형 융합 ─────────────────────────────────────
         self.fusion = AdaptiveFusion(
             rgb_c3=rgb_c3, rgb_c4=rgb_c4,
             thm_c3=thm_c3, thm_c4=thm_c4,
@@ -56,13 +56,13 @@ class DualYOLO(nn.Module):
             cond_dim=cond_dim,
         )
 
-        # ── FPN ───────────────────────────────────────────────────
+        # ── 특징 피라미드 ───────────────────────────────────────
         self.fpn = FPN(in_channels=fusion_dim, fpn_dim=fpn_dim)
 
-        # ── Detection Heads ───────────────────────────────────────
+        # ── 탐지 헤드 ───────────────────────────────────────────
         self.ms_heads = MultiScaleHeads(fpn_dim=fpn_dim)
 
-        # ── Aux Heads ─────────────────────────────────────────────
+        # ── 보조 헤드 ───────────────────────────────────────────
         self.aux_rgb = AuxHead(in_channels=rgb_c4)
         self.aux_thm = AuxHead(in_channels=thm_c4)
 
@@ -99,16 +99,16 @@ class DualYOLO(nn.Module):
         # 1. 백본
         rgb_feats, thm_feats = self.backbone(rgb, thermal)
 
-        # 2. Adaptive Fusion
+        # 2. 조건 적응형 융합
         fused = self.fusion(rgb_feats, thm_feats, cond_vec)
 
-        # 3. FPN
+        # 3. 특징 피라미드
         fpn_feats = self.fpn(fused)
 
-        # 4. Detection
+        # 4. 탐지
         detections = self.ms_heads(fpn_feats, self.uncertainty_active)
 
-        # 5. Aux Heads
+        # 5. 보조 헤드
         aux_rgb_out = None
         aux_thm_out = None
         if self.aux_active:
@@ -131,17 +131,17 @@ class DualYOLO(nn.Module):
 
     # ------------------------------------------------------------------
     def freeze_backbone(self):
-        """Phase 3 전반부 — 백본 파라미터 동결."""
+        """3단계 전반부 — 백본 파라미터 동결."""
         for p in self.backbone.parameters():
             p.requires_grad_(False)
 
     def unfreeze_backbone(self):
-        """Phase 3 후반부 — 백본 동결 해제."""
+        """3단계 후반부 — 백본 동결 해제."""
         for p in self.backbone.parameters():
             p.requires_grad_(True)
 
     def get_param_groups(self, phase: int) -> list[dict]:
-        """페이즈별 optimizer param group 반환.
+        """페이즈별 optimizer 파라미터 그룹 반환.
 
         Phase 1: backbone lr=1e-5, rest lr=1e-4
         Phase 2: backbone lr=5e-6, rest lr=1e-5, uncertainty lr=1e-4
@@ -171,7 +171,7 @@ class DualYOLO(nn.Module):
                 {"params": fusion_fpn_params + head_params, "lr": 1e-5, "name": "fusion_fpn_head"},
                 {"params": unc_params,               "lr": 1e-4, "name": "uncertainty"},
             ]
-        else:  # phase 3
+        else:  # 3단계
             return [
                 {"params": backbone_params,         "lr": 5e-6, "name": "backbone"},
                 {"params": fusion_fpn_params + head_params + unc_params, "lr": 1e-5, "name": "rest"},

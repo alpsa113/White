@@ -1,4 +1,4 @@
-"""Detection validation metrics."""
+"""탐지 검증 지표."""
 
 from __future__ import annotations
 

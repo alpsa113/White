@@ -1,18 +1,21 @@
-# Weights
+# Weight 관리
 
-Store large model weight files outside Git.
+대용량 모델 weight 파일은 Git에 올리지 않습니다.
 
-Colab default path:
+Colab 기준 기본 경로:
 
 ```text
 /content/drive/MyDrive/dual_yolo/weights/yolo26m-coco.pt
 ```
 
-Required pretrained backbone checkpoint:
+필수 사전학습 백본 checkpoint:
 
 ```text
 yolo26m-coco.pt
 ```
 
-The file must be a PyTorch training checkpoint whose YOLO26 provider code is
-available under `vendor/yolo26/` or otherwise importable in the Colab runtime.
+이 파일은 PyTorch 학습 checkpoint여야 합니다.
+checkpoint 내부에는 `model` 또는 `ema` 키로 실제 `nn.Module`이 들어 있어야 합니다.
+
+YOLO26 provider 코드는 `vendor/yolo26/` 아래에 포함되어 있거나,
+Colab 런타임에서 import 가능한 상태여야 합니다.

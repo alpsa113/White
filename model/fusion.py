@@ -29,7 +29,7 @@ class ConditionWeightNet(nn.Module):
             nn.ReLU(inplace=True),
             nn.Linear(hidden, hidden),
             nn.ReLU(inplace=True),
-            nn.Linear(hidden, fusion_dim * 2),  # [α_raw, β_raw] per channel
+            nn.Linear(hidden, fusion_dim * 2),  # 채널별 [α_raw, β_raw]
         )
 
     def forward(self, cond: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
@@ -43,7 +43,7 @@ class ConditionWeightNet(nn.Module):
         weights = self.mlp(cond)                    # [B, fusion_dim*2]
         weights = weights.view(weights.size(0), 2, -1)  # [B, 2, fusion_dim]
         weights = F.softmax(weights, dim=1)         # 채널별 합이 1
-        return weights[:, 0, :], weights[:, 1, :]  # alpha, beta
+        return weights[:, 0, :], weights[:, 1, :]  # RGB/열화상 가중치
 
 
 class AdaptiveFusion(nn.Module):
@@ -101,7 +101,7 @@ class AdaptiveFusion(nn.Module):
         alpha: torch.Tensor,
         beta: torch.Tensor,
     ) -> torch.Tensor:
-        """proj_rgb, proj_thm 중 존재하는 것만 사용."""
+        """RGB/열화상 투영 결과 중 존재하는 것만 사용."""
         if proj_rgb is not None and proj_thm is not None:
             a = alpha.view(*alpha.shape, 1, 1)   # [B, C, 1, 1]
             b = beta.view(*beta.shape, 1, 1)
@@ -115,7 +115,7 @@ class AdaptiveFusion(nn.Module):
         self,
         rgb_feats: dict | None,
         thm_feats: dict | None,
-        cond_vec: torch.Tensor,       # [B, 3]
+        cond_vec: torch.Tensor,       # [B, 3] 조건벡터
     ) -> dict[str, torch.Tensor]:
         """
         Returns:

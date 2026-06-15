@@ -2,13 +2,13 @@
 DualYOLO 학습 엔트리포인트
 
 사용법:
-    # Phase 1 시작
+    # 1단계 시작
     python train.py --phase 1
 
-    # Phase 2 시작 (Phase 1 체크포인트에서)
+    # 2단계 시작(1단계 체크포인트에서)
     python train.py --phase 2 --resume checkpoints/phase1/best.pt
 
-    # Phase 3 시작
+    # 3단계 시작
     python train.py --phase 3 --resume checkpoints/phase2/best.pt
 
     # 커스텀 설정
@@ -59,7 +59,7 @@ def build_dataset(
     img_size: int,
     small_box_area: float = 32 * 32,
 ):
-    """phases.yaml 의 dataset 항목 → Dataset 객체."""
+    """phases.yaml 의 데이터셋 항목 → Dataset 객체."""
     transforms = build_transforms(mode, img_size)
     ds_type = ds_cfg["type"]
 
@@ -77,7 +77,7 @@ def build_dataset(
             ann_file=ds_cfg.get("ann_file"),
             transforms=transforms,
         )
-    else:  # generic / manifest
+    else:  # 범용 데이터셋 또는 manifest
         return GenericDetectionDataset(
             root=ds_cfg.get("root", "."),
             ann_file=ds_cfg["ann_file"],
@@ -142,8 +142,8 @@ def validate_allowed_modalities(dataset, phase_yaml: dict, split_name: str):
     if disallowed:
         allowed_names = [name for name, ok in allowed.items() if ok]
         raise ValueError(
-            f"{split_name} dataset contains disallowed modalities: "
-            f"{disallowed}. Allowed modalities: {allowed_names}"
+            f"{split_name} 데이터셋에 허용되지 않은 모달리티가 포함되어 있습니다: "
+            f"{disallowed}. 허용 모달리티: {allowed_names}"
         )
 
 
@@ -251,7 +251,7 @@ def build_loaders(
     )
 
     if not ds_cfgs:
-        logger.warning("datasets 항목이 없습니다. 더미 데이터로 실행합니다.")
+        logger.warning("데이터셋 항목이 없습니다. 더미 데이터로 실행합니다.")
         return _dummy_loader(batch_size), None
 
     datasets = []
@@ -259,9 +259,9 @@ def build_loaders(
         try:
             ds = build_dataset(cfg, "train", img_size, small_box_area)
             datasets.append(ds)
-            logger.info(f"  Loaded {cfg['type']}: {len(ds)} samples")
+            logger.info(f"  {cfg['type']} 로드 완료: {len(ds)}개 샘플")
         except Exception as e:
-            logger.warning(f"  Dataset load failed ({cfg.get('root', '?')}): {e}")
+            logger.warning(f"  데이터셋 로드 실패({cfg.get('root', '?')}): {e}")
 
     if not datasets:
         logger.error("로드된 데이터셋이 없습니다.")
@@ -295,9 +295,9 @@ def build_loaders(
             try:
                 ds = build_dataset(cfg, "val", img_size, small_box_area)
                 val_datasets.append(ds)
-                logger.info(f"  Loaded val {cfg['type']}: {len(ds)} samples")
+                logger.info(f"  검증 {cfg['type']} 로드 완료: {len(ds)}개 샘플")
             except Exception as e:
-                logger.warning(f"  Val dataset load failed ({cfg.get('root', '?')}): {e}")
+                logger.warning(f"  검증 데이터셋 로드 실패({cfg.get('root', '?')}): {e}")
         if val_datasets:
             val_ds = ConcatDataset(val_datasets) if len(val_datasets) > 1 else val_datasets[0]
             validate_allowed_modalities(val_ds, phase_yaml, "val")
@@ -318,7 +318,7 @@ def build_loaders(
 
 
 def build_phase_config(phase: int, phase_yaml: dict, epochs: int | None) -> PhaseConfig:
-    """phases.yaml 값을 PHASE_DEFAULTS 위에 얹어 PhaseConfig 생성."""
+    """phases.yaml 값을 기본 페이즈 설정 위에 얹어 PhaseConfig 생성."""
     cfg = replace(PHASE_DEFAULTS[phase])
     for key, value in phase_yaml.items():
         if hasattr(cfg, key):
@@ -352,7 +352,7 @@ def _dummy_loader(batch_size: int) -> DataLoader:
 
 # ---------------------------------------------------------------------------
 def main():
-    parser = argparse.ArgumentParser(description="DualYOLO Training")
+    parser = argparse.ArgumentParser(description="DualYOLO 학습")
     parser.add_argument("--phase", type=int, choices=[1, 2, 3], required=True)
     parser.add_argument("--resume", type=str, default=None,
                         help="이전 페이즈 체크포인트 경로")
@@ -383,8 +383,8 @@ def main():
     img_size    = args.img_size
 
     logger.info(
-        f"Phase {args.phase} | batch={batch_size} | "
-        f"accum={grad_accum_steps} | epochs={phase_cfg.max_epochs} | img={img_size}"
+        f"{args.phase}단계 | 배치={batch_size} | "
+        f"누적={grad_accum_steps} | 에폭={phase_cfg.max_epochs} | 이미지={img_size}"
     )
 
     # ── 모델 ───────────────────────────────────────────────────────
@@ -395,18 +395,18 @@ def main():
         backbone_cfg=m_cfg.get("backbone", {}),
     )
     logger.info(
-        f"Model params: {sum(p.numel() for p in model.parameters()):,}"
+        f"모델 파라미터 수: {sum(p.numel() for p in model.parameters()):,}"
     )
 
     # ── 데이터 ─────────────────────────────────────────────────────
     train_loader, val_loader = build_loaders(
         phase_yaml, batch_size, num_workers, img_size
     )
-    logger.info(f"Train batches: {len(train_loader)}")
+    logger.info(f"학습 배치 수: {len(train_loader)}")
     if val_loader is not None:
-        logger.info(f"Val batches: {len(val_loader)}")
+        logger.info(f"검증 배치 수: {len(val_loader)}")
 
-    # ── Trainer ────────────────────────────────────────────────────
+    # ── 학습기 ───────────────────────────────────────────────────
     trainer = Trainer(
         model=model,
         train_loader=train_loader,

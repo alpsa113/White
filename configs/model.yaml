@@ -23,7 +23,7 @@ training:
   batch_size: 4
   grad_accum_steps: 2
   num_workers: 4
-  amp: true           # Mixed precision
+  amp: true           # 혼합 정밀도 사용
 
 # 클래스 정의 (ID 고정)
 classes:

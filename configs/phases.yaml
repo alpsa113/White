@@ -22,7 +22,7 @@ phase1:
 phase2:
   max_epochs: 20
   aux_active: true
-  uncertainty_active: false   # epoch 10부터 자동 활성화
+  uncertainty_active: false   # 10 epoch부터 자동 활성화
   fusion_reg_active: true
   allow_rgb_only: false
   allow_thm_only: false
@@ -55,7 +55,7 @@ phase3:
   allow_rgb_only: true
   allow_thm_only: true
   allow_pairs: true
-  class_weights: [1.5, 1.0, 1.0, 0.05]   # person 가중치 상향
+  class_weights: [1.5, 1.0, 1.0, 0.05]   # person 클래스 가중치 상향
   datasets:
     - type: manifest
       root: .

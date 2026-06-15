@@ -1,9 +1,9 @@
 """
-3단계 학습 시나리오 — Optimizer / Scheduler / 플래그 관리
+3단계 학습 시나리오 — optimizer / scheduler / 플래그 관리
 
 PhaseConfig: 각 페이즈의 활성화 플래그 + optimizer 하이퍼파라미터
-build_optimizer: 모델 param groups → AdamW optimizer
-PhaseScheduler: 페이즈 전환 및 Phase 3 백본 동결/해제 관리
+build_optimizer: 모델 파라미터 그룹 → AdamW optimizer
+PhaseScheduler: 페이즈 전환 및 3단계 백본 동결/해제 관리
 """
 
 from dataclasses import dataclass, field
@@ -22,7 +22,7 @@ class PhaseConfig:
     uncertainty_active: bool = False
     fusion_reg_active: bool = False
 
-    # Phase 3 전용: 백본 동결 → 해제 전환 epoch
+    # 3단계 전용: 백본 동결 → 해제 전환 epoch
     backbone_unfreeze_epoch: int | None = None   # None이면 동결 유지
 
     # 샘플러 제어
@@ -31,7 +31,7 @@ class PhaseConfig:
     allow_pairs: bool = True
     modality_dropout_prob: float = 0.0
 
-    # Loss 가중치 오버라이드 (None이면 DualYOLOLoss 기본값 사용)
+    # 손실 가중치 오버라이드(None이면 DualYOLOLoss 기본값 사용)
     aux_weight: float | None = None
     fus_reg_weight: float | None = None
 
@@ -78,9 +78,9 @@ PHASE_DEFAULTS: dict[int, PhaseConfig] = {
 
 
 def build_optimizer(model, phase: int) -> optim.Optimizer:
-    """모델의 param groups 를 읽어 AdamW optimizer 생성."""
+    """모델의 파라미터 그룹을 읽어 AdamW optimizer 생성."""
     param_groups = model.get_param_groups(phase)
-    # 빈 param group 제거
+    # 빈 파라미터 그룹 제거
     param_groups = [g for g in param_groups if len(list(g["params"])) > 0]
     return optim.AdamW(param_groups, weight_decay=1e-4)
 
@@ -94,7 +94,7 @@ def build_scheduler(
 
 
 class PhaseScheduler:
-    """페이즈 전환 및 Phase 3 백본 동결 전환 관리.
+    """페이즈 전환 및 3단계 백본 동결 전환 관리.
 
     사용법:
         scheduler = PhaseScheduler(model, phase=2, cfg=PHASE_DEFAULTS[2])
@@ -118,10 +118,10 @@ class PhaseScheduler:
         self.lr_scheduler = lr_scheduler
         self._backbone_unfrozen = False
 
-        # Phase 2: 중간 epoch에서 uncertainty 활성화
+        # 2단계: 중간 epoch에서 불확실성 헤드 활성화
         self._unc_activate_epoch = self.cfg.max_epochs // 2
 
-        # Phase 3: 시작 시 백본 동결
+        # 3단계: 시작 시 백본 동결
         if phase == 3:
             model.freeze_backbone()
 
@@ -141,14 +141,14 @@ class PhaseScheduler:
     def step(self, epoch: int):
         self._apply_flags(epoch)
 
-        # Phase 3: 백본 동결 해제
+        # 3단계: 백본 동결 해제
         if (
             self.phase == 3
             and self.cfg.backbone_unfreeze_epoch is not None
             and epoch >= self.cfg.backbone_unfreeze_epoch
             and not self._backbone_unfrozen
         ):
-            print(f"[PhaseScheduler] Epoch {epoch}: backbone unfrozen.")
+            print(f"[페이즈 스케줄러] 에폭 {epoch}: 백본 동결을 해제했습니다.")
             self.model.unfreeze_backbone()
             self._set_all_param_group_lr(5e-6)
             self._backbone_unfrozen = True
