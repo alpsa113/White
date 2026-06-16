@@ -52,7 +52,50 @@ phases:
   phase3:
     val_ratio: 0.2
     sources:
+      - name: gop_raw_single
+        format: gop_class_yolo
+        root: data/gop_raw/single
+        classes: [0, 1, 2, 3]
+        include_modalities: [rgb, thermal]
+        modality_dirs:
+          rgb: rgb
+          thermal: tir
+        image_dir: img
+        label_dir: label
+        strict_label_match: true
+        cond_vec_by_modality:
+          rgb: [0.0, 0.5, 1.0]
+          thermal: [0.0, 0.3, 0.0]
+
+      - name: gop_raw_pair
+        enabled: false
+        format: gop_class_yolo_pair
+        root: data/gop_raw/pair
+        classes: [0, 1, 2, 3]
+        rgb_dir: rgb
+        thermal_dir: tir
+        image_dir: img
+        label_dir: label
+        label_source: rgb
+        strict_label_match: true
+        cond_vec: [0.0, 0.3, 0.0]
+        tags: [real_pair]
+
+      - name: gop_empty_background
+        format: gop_empty_folder
+        root: data/gop_raw/empty
+        include_modalities: [rgb, thermal]
+        modality_dirs:
+          rgb: rgb
+          thermal: tir
+        image_dir: img
+        cond_vec_by_modality:
+          rgb: [0.0, 0.5, 1.0]
+          thermal: [0.0, 0.3, 0.0]
+        tags: [empty_background]
+
       - name: gop_day_pair
+        enabled: false
         format: coco
         root: data/gop_day_pair
         ann_file: data/gop_day_pair/train.json
@@ -63,6 +106,7 @@ phases:
         cond_vec: [0.0, 0.5, 1.0]
 
       - name: gop_night_pair
+        enabled: false
         format: coco
         root: data/gop_night_pair
         ann_file: data/gop_night_pair/train.json
@@ -73,6 +117,7 @@ phases:
         cond_vec: [0.0, 0.3, 0.0]
 
       - name: distant_person_rgb
+        enabled: false
         format: coco
         root: data/distant_person_rgb
         ann_file: data/distant_person_rgb/train.json
@@ -81,6 +126,7 @@ phases:
         cond_vec: [0.0, 0.5, 1.0]
 
       - name: distant_person_thermal_night
+        enabled: false
         format: coco
         root: data/distant_person_thermal_night
         ann_file: data/distant_person_thermal_night/train.json
@@ -89,6 +135,7 @@ phases:
         cond_vec: [0.0, 0.3, 0.0]
 
       - name: small_non_target_rgb
+        enabled: false
         format: coco
         root: data/small_non_target_rgb
         ann_file: data/small_non_target_rgb/train.json
@@ -97,6 +144,7 @@ phases:
         cond_vec: [0.0, 0.5, 1.0]
 
       - name: small_non_target_thermal_night
+        enabled: false
         format: coco
         root: data/small_non_target_thermal_night
         ann_file: data/small_non_target_thermal_night/train.json
@@ -105,6 +153,7 @@ phases:
         cond_vec: [0.0, 0.3, 0.0]
 
       - name: gop_verified_empty_background
+        enabled: false
         format: coco
         root: data/gop_verified_empty_background
         ann_file: data/gop_verified_empty_background/train.json

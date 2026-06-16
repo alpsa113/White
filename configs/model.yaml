@@ -8,7 +8,7 @@ model:
     name: yolo26m
     provider: local_checkpoint
     provider_code: vendor/yolo26
-    weights: /content/drive/MyDrive/dual_yolo/weights/yolo26m-coco.pt
+    weights: weights/yolo26m-coco.pt
     rgb_pretrained: true
     thm_pretrained: true
     c3_layer: auto
