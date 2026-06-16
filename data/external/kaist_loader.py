@@ -157,13 +157,17 @@ class KAISTDataset(Dataset):
         # transform 적용
         weather_id = None
         if self.transforms is not None:
+            transform_thermal = (
+                np.stack([thm_img] * 3, axis=-1)
+                if thm_img is not None and thm_img.ndim == 2 else thm_img
+            )
             base = rgb_img if rgb_img is not None else (
-                np.stack([thm_img]*3, -1) if thm_img is not None
+                transform_thermal if transform_thermal is not None
                 else np.zeros((512, 640, 3), dtype=np.uint8)
             )
             result = self.transforms(
                 image=base,
-                thermal=thm_img,
+                thermal=transform_thermal,
                 bboxes=boxes,
                 labels=labels,
             )
@@ -171,6 +175,8 @@ class KAISTDataset(Dataset):
                 rgb_img = result["image"]
             if thm_img is not None:
                 thm_img = result.get("thermal", thm_img)
+                if thm_img.ndim == 3:
+                    thm_img = thm_img[..., 0]
             boxes  = [list(b) for b in result["bboxes"]]
             labels = result["labels"]
             weather_id = result.get("weather_id")

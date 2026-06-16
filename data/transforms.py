@@ -1,4 +1,5 @@
 import albumentations as A
+import cv2
 import numpy as np
 
 
@@ -33,6 +34,21 @@ def _compose(transforms: list, bbox_params: A.BboxParams) -> A.Compose:
     )
 
 
+def _letterbox(img_size: int) -> list:
+    """원본 비율을 유지한 채 목표 입력 크기까지 padding."""
+    return [
+        A.LongestMaxSize(max_size=img_size),
+        A.PadIfNeeded(
+            min_height=img_size,
+            min_width=img_size,
+            position="center",
+            border_mode=cv2.BORDER_CONSTANT,
+            fill=(114, 114, 114),
+            fill_mask=0,
+        ),
+    ]
+
+
 def build_transforms(mode: str = "train", img_size: int = 640):
     bbox_params = A.BboxParams(
         format="pascal_voc",
@@ -43,11 +59,7 @@ def build_transforms(mode: str = "train", img_size: int = 640):
 
     if mode == "train":
         pre_weather = _compose([
-            A.RandomResizedCrop(
-                size=(img_size, img_size),
-                scale=(0.5, 1.0),
-                ratio=(0.75, 1.33),
-            ),
+            *_letterbox(img_size),
             A.HorizontalFlip(p=0.5),
             A.ColorJitter(
                 brightness=0.3, contrast=0.3, saturation=0.2, hue=0.1, p=0.6
@@ -74,7 +86,7 @@ def build_transforms(mode: str = "train", img_size: int = 640):
         return WeatherAwareTransform(pre_weather, weather_transforms, normalize)
     else:  # 검증
         transforms = [
-            A.Resize(img_size, img_size),
+            *_letterbox(img_size),
             A.Normalize(
                 mean=(0.485, 0.456, 0.406),
                 std=(0.229, 0.224, 0.225),
