@@ -1,0 +1,77 @@
+# 외부/레거시 데이터셋을 manifest 생성 파이프라인에 붙일 때 참고하는 예시입니다.
+# 현재 프로젝트 표준 학습은 manifest_splits.yaml의 phase별 raw 디렉토리를 기준으로 진행합니다.
+
+seed: 42
+val_ratio: 0.2
+output_dir: data/manifests
+
+phases:
+  phase3:
+    val_ratio: 0.2
+    sources:
+      - name: gop_day_pair
+        enabled: false
+        format: coco
+        root: data/gop_day_pair
+        ann_file: data/gop_day_pair/train.json
+        rgb_dir: rgb
+        thermal_dir: tir_cyclegan
+        modality: pair
+        require_boxes: false
+        cond_vec: [0.0, 0.5, 1.0]
+
+      - name: gop_night_pair
+        enabled: false
+        format: coco
+        root: data/gop_night_pair
+        ann_file: data/gop_night_pair/train.json
+        rgb_dir: rgb
+        thermal_dir: tir_cyclegan
+        modality: pair
+        require_boxes: false
+        cond_vec: [0.0, 0.3, 0.0]
+
+      - name: distant_person_rgb
+        enabled: false
+        format: coco
+        root: data/distant_person_rgb
+        ann_file: data/distant_person_rgb/train.json
+        modality: rgb
+        require_labels: [0]
+        cond_vec: [0.0, 0.5, 1.0]
+
+      - name: distant_person_thermal_night
+        enabled: false
+        format: coco
+        root: data/distant_person_thermal_night
+        ann_file: data/distant_person_thermal_night/train.json
+        modality: thermal
+        require_labels: [0]
+        cond_vec: [0.0, 0.3, 0.0]
+
+      - name: small_non_target_rgb
+        enabled: false
+        format: coco
+        root: data/small_non_target_rgb
+        ann_file: data/small_non_target_rgb/train.json
+        modality: rgb
+        require_labels: [3]
+        cond_vec: [0.0, 0.5, 1.0]
+
+      - name: small_non_target_thermal_night
+        enabled: false
+        format: coco
+        root: data/small_non_target_thermal_night
+        ann_file: data/small_non_target_thermal_night/train.json
+        modality: thermal
+        require_labels: [3]
+        cond_vec: [0.0, 0.3, 0.0]
+
+      - name: gop_verified_empty_background
+        enabled: false
+        format: coco
+        root: data/gop_verified_empty_background
+        ann_file: data/gop_verified_empty_background/train.json
+        modality: rgb
+        require_boxes: false
+        cond_vec: [0.0, 0.5, 1.0]

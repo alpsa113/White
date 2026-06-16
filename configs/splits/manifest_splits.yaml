@@ -6,48 +6,36 @@ phases:
   phase1:
     val_ratio: 0.2
     sources:
-      - name: coco_person
-        format: coco
-        root: data/coco
-        ann_file: data/coco/annotations/instances_train2017.json
-        modality: rgb
-        require_labels: [0]
-        cond_vec: [0.0, 0.5, 1.0]
-
-      - name: wildlife_rgb
-        format: coco
-        root: data/wildlife_rgb
-        ann_file: data/wildlife_rgb/train.json
-        modality: rgb
-        require_labels: [1, 2]
-        cond_vec: [0.0, 0.5, 1.0]
-
-      - name: wildlife_thermal
-        format: yolo
-        root: data/wildlife_thermal
-        ann_file: data/wildlife_thermal/train.txt
-        modality: thermal
-        require_labels: [1, 2]
-        cond_vec: [0.0, 0.5, 1.0]
-
-      - name: kaist_person
-        format: kaist
-        root: data/kaist
-        split_file: data/kaist/splits/train.txt
-        require_boxes: true
+      - name: phase1_single
+        format: gop_class_yolo
+        root: data/phase1_raw/single
+        classes: [0, 1, 2, 3]
+        include_modalities: [rgb, thermal]
+        modality_dirs:
+          rgb: rgb
+          thermal: tir
+        image_dir: img
+        label_dir: label
+        strict_label_match: true
+        cond_vec_by_modality:
+          rgb: [0.0, 0.5, 1.0]
+          thermal: [0.0, 0.3, 0.0]
 
   phase2:
     val_ratio: 0.2
     sources:
-      - name: llvip_pair
-        format: coco
-        root: data/llvip
-        ann_file: data/llvip/LLVIP_train.json
-        rgb_dir: visible/train
-        thermal_dir: infrared/train
-        modality: pair
-        require_labels: [0]
-        cond_vec: [0.0, 0.2, 0.0]
+      - name: phase2_pair
+        format: gop_class_yolo_pair
+        root: data/phase2_raw/pair
+        classes: [0, 1, 2, 3]
+        rgb_dir: rgb
+        thermal_dir: tir
+        image_dir: img
+        label_dir: label
+        label_source: rgb
+        strict_label_match: true
+        cond_vec: [0.0, 0.3, 0.0]
+        tags: [real_pair]
 
   phase3:
     val_ratio: 0.2
@@ -93,70 +81,3 @@ phases:
           rgb: [0.0, 0.5, 1.0]
           thermal: [0.0, 0.3, 0.0]
         tags: [empty_background]
-
-      - name: gop_day_pair
-        enabled: false
-        format: coco
-        root: data/gop_day_pair
-        ann_file: data/gop_day_pair/train.json
-        rgb_dir: rgb
-        thermal_dir: tir_cyclegan
-        modality: pair
-        require_boxes: false
-        cond_vec: [0.0, 0.5, 1.0]
-
-      - name: gop_night_pair
-        enabled: false
-        format: coco
-        root: data/gop_night_pair
-        ann_file: data/gop_night_pair/train.json
-        rgb_dir: rgb
-        thermal_dir: tir_cyclegan
-        modality: pair
-        require_boxes: false
-        cond_vec: [0.0, 0.3, 0.0]
-
-      - name: distant_person_rgb
-        enabled: false
-        format: coco
-        root: data/distant_person_rgb
-        ann_file: data/distant_person_rgb/train.json
-        modality: rgb
-        require_labels: [0]
-        cond_vec: [0.0, 0.5, 1.0]
-
-      - name: distant_person_thermal_night
-        enabled: false
-        format: coco
-        root: data/distant_person_thermal_night
-        ann_file: data/distant_person_thermal_night/train.json
-        modality: thermal
-        require_labels: [0]
-        cond_vec: [0.0, 0.3, 0.0]
-
-      - name: small_non_target_rgb
-        enabled: false
-        format: coco
-        root: data/small_non_target_rgb
-        ann_file: data/small_non_target_rgb/train.json
-        modality: rgb
-        require_labels: [3]
-        cond_vec: [0.0, 0.5, 1.0]
-
-      - name: small_non_target_thermal_night
-        enabled: false
-        format: coco
-        root: data/small_non_target_thermal_night
-        ann_file: data/small_non_target_thermal_night/train.json
-        modality: thermal
-        require_labels: [3]
-        cond_vec: [0.0, 0.3, 0.0]
-
-      - name: gop_verified_empty_background
-        enabled: false
-        format: coco
-        root: data/gop_verified_empty_background
-        ann_file: data/gop_verified_empty_background/train.json
-        modality: rgb
-        require_boxes: false
-        cond_vec: [0.0, 0.5, 1.0]

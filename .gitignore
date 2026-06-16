@@ -1,7 +1,10 @@
 .DS_Store
 __pycache__/
 *.py[cod]
-/data/
+/data/*
+!/data/*.py
+!/data/external/
+!/data/external/*.py
 /checkpoints/
 /weights/*.pt
 /weights/*.pth
