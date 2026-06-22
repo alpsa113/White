@@ -380,3 +380,5 @@ phase2에 `rgb` 또는 `thermal` 단독 sample이 들어가면 설정상 학습 
 | label 품질 | 폴더 class id와 label class id 일치 여부 |
 | split 품질 | 같은 scene/stem이 train/val로 갈라지지 않는지 |
 | 성능 지표 | class별 AP/recall, RGB vs TIR 성능 차이, empty false positive |
+
+학습 완료 후 이미지/영상 추론 실행 방법과 결과 JSON 구조는 `INFERENCE_PIPELINE.md`를 참고합니다.

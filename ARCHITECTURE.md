@@ -1,6 +1,6 @@
 # DualYOLO Architecture Pipeline
 
-> 버전: v0.6.1
+> 버전: v0.6.2
 > 최종 수정: 2026-06-22
 > 이 문서는 모델 구조, 데이터 파이프라인, 코드 모듈 구조의 기준 문서입니다.
 
@@ -13,6 +13,7 @@
 | v0.5.5 | 2026-06-15 | YOLO26-M COCO pretrained 백본을 local checkpoint 기반 필수 로드 방식으로 명확화 |
 | v0.6.0 | 2026-06-16 | phase1/2/3 표준 raw 디렉토리 구조, manifest 중심 학습, LLVIP 변환 도구, loader 모듈 분리, `run_training()` 실행 구조 반영 |
 | v0.6.1 | 2026-06-22 | phase 전환용 `--init-from`과 같은 phase 재개용 `--resume` 분리 |
+| v0.6.2 | 2026-06-22 | 이미지/영상 추론 모듈, CLI, 추론 파이프라인 문서 반영 |
 
 ---
 
@@ -311,7 +312,43 @@ run_training()
 
 ---
 
-## 10. 미결 과제
+## 10. 추론 파이프라인
+
+학습 완료 후 checkpoint는 `inference/` 모듈을 통해 이미지 또는 영상 추론에 사용합니다.
+
+```text
+이미지/영상 입력
+  → inference.preprocessing
+  → DualYOLOPredictor
+  → inference.postprocessing
+  → inference.visualization
+  → JSON / bbox 이미지 또는 영상
+```
+
+모듈 구성:
+
+```text
+inference/
+  schemas.py          # 추론 결과, bbox, letterbox 메타데이터 dataclass
+  preprocessing.py    # 이미지 로드, letterbox, normalize, tensor 변환
+  postprocessing.py   # decode, NMS, 원본 좌표 복원
+  predictor.py        # DualYOLO checkpoint 로드와 단일 이미지 추론
+  visualization.py    # bbox 시각화 공통 함수
+  video.py            # 영상 프레임 순회와 프레임별 추론
+
+tools/
+  predict_image.py
+  predict_video.py
+```
+
+영상 추론은 별도 모델을 만들지 않고 `DualYOLOPredictor.predict()`를 프레임마다 반복 호출합니다.
+`frame_stride`로 추론할 프레임 간격을 조정하며, 30fps 기준 1분 내외 영상은 `frame_stride=5`를 시작값으로 둡니다.
+
+상세 실행 예시와 결과 JSON 구조는 `INFERENCE_PIPELINE.md`를 기준으로 합니다.
+
+---
+
+## 11. 미결 과제
 
 | 항목 | 상태 |
 |------|------|
@@ -319,4 +356,5 @@ run_training()
 | LLVIP + boar/deer synthetic pair 비율 실험 | 필요 |
 | phase3 hard negative weight 검증 | 필요 |
 | 동적 target assignment 개선 검토 | 추후 |
-| 영상/스트림 추론 구현 | 추후 |
+| FastAPI/Streamlit 서비스 API 연동 | 추후 |
+| 실시간 스트림 추론 최적화 | 추후 |

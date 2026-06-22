@@ -27,10 +27,13 @@ data/
   builders.py                    # Dataset/DataLoader 생성
   samplers.py                    # 모달리티 단위 batch sampler
   external/                      # KAIST/LLVIP 원본 직접 로더 보관
+inference/                       # 이미지/영상 추론, 전처리/후처리, 시각화
 model/                           # DualYOLO, 백본, 융합, FPN, 헤드
 tools/
   build_manifest_splits.py       # phase별 manifest 생성
   convert_llvip_to_phase2_raw.py # LLVIP → phase2_raw/pair 변환
+  predict_image.py               # 단일 이미지 추론 CLI
+  predict_video.py               # 영상 추론 CLI
   manifest_loaders/              # manifest 생성용 source loader
 training/                        # 손실, 지표, 학습기, phase scheduler
 vendor/yolo26/                   # 공식 Ultralytics YOLO26 provider 코드
@@ -204,6 +207,36 @@ run_training(
 )
 ```
 
+## 추론 실행
+
+학습된 checkpoint는 이미지와 영상 추론에 사용할 수 있습니다.
+자세한 구조와 결과 JSON 형식은 [INFERENCE_PIPELINE.md](INFERENCE_PIPELINE.md)를 참고합니다.
+
+단일 RGB 이미지 예시:
+
+```bash
+python tools/predict_image.py \
+  --checkpoint checkpoints/phase3/best.pt \
+  --rgb data/inference/rgb/sample_rgb.jpg \
+  --output outputs/pred_rgb.jpg \
+  --json outputs/pred_rgb.json \
+  --device cpu
+```
+
+영상 예시:
+
+```bash
+python tools/predict_video.py \
+  --checkpoint checkpoints/phase3/best.pt \
+  --video data/inference/video/sample_rgb_video.mp4 \
+  --output outputs/pred_sample_video.mp4 \
+  --json outputs/pred_sample_video.json \
+  --device cpu \
+  --frame-stride 5
+```
+
+현재 테스트용 checkpoint는 confidence가 낮을 수 있습니다. bbox 시각화 동작만 확인하려면 임시로 `--conf 0.0001`처럼 낮은 값을 사용할 수 있지만, 실제 검증에서는 충분히 학습된 checkpoint 기준으로 threshold를 다시 잡아야 합니다.
+
 ## Git 관리 정책
 
 Git에는 코드, 설정, 문서만 올립니다.
@@ -213,6 +246,7 @@ Git에는 코드, 설정, 문서만 올립니다.
 ```text
 data/*
 checkpoints/
+outputs/
 weights/*.pt
 weights/*.pth
 weights/*.onnx
@@ -224,4 +258,4 @@ weights/*.engine
 ```
 
 단, `data/*.py`와 `data/external/*.py`는 코드이므로 Git 추적 대상입니다.
-대용량 데이터셋, 생성된 manifest, 학습 checkpoint, 사전학습 weight는 Git에 올리지 않습니다.
+대용량 데이터셋, 생성된 manifest, 학습 checkpoint, 사전학습 weight, 추론 출력물은 Git에 올리지 않습니다.
