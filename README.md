@@ -175,7 +175,7 @@ python train.py --phase 1 --device cuda
 ```bash
 python train.py \
   --phase 2 \
-  --resume checkpoints/phase1/best.pt \
+  --init-from checkpoints/phase1/best.pt \
   --device cuda
 ```
 
@@ -184,9 +184,13 @@ python train.py \
 ```bash
 python train.py \
   --phase 3 \
-  --resume checkpoints/phase2/best.pt \
+  --init-from checkpoints/phase2/best.pt \
   --device cuda
 ```
+
+phase 전환에는 `--init-from`을 사용합니다.
+이 옵션은 이전 phase checkpoint에서 모델 weight만 가져오고 optimizer, scheduler, epoch은 새 phase 기준으로 시작합니다.
+`--resume`은 같은 phase 학습이 중간에 끊겼을 때 전체 학습 상태를 이어받는 용도입니다.
 
 Python 코드에서 직접 호출할 수도 있습니다.
 
@@ -195,7 +199,7 @@ from train import run_training
 
 run_training(
     phase=3,
-    resume="checkpoints/phase2/best.pt",
+    init_from="checkpoints/phase2/best.pt",
     device="cuda",
 )
 ```

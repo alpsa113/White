@@ -5,11 +5,11 @@ DualYOLO 학습 엔트리포인트
     # 1단계 시작
     python train.py --phase 1
 
-    # 2단계 시작(1단계 체크포인트에서)
-    python train.py --phase 2 --resume checkpoints/phase1/best.pt
+    # 2단계 시작(1단계 모델 weight에서)
+    python train.py --phase 2 --init-from checkpoints/phase1/best.pt
 
     # 3단계 시작
-    python train.py --phase 3 --resume checkpoints/phase2/best.pt
+    python train.py --phase 3 --init-from checkpoints/phase2/best.pt
 
     # 커스텀 설정
     python train.py --phase 1 --batch 16 --epochs 50 --img-size 640
@@ -58,6 +58,7 @@ def build_phase_config(phase: int, phase_yaml: dict, epochs: int | None) -> Phas
 def run_training(
     phase: int,
     resume: str | None = None,
+    init_from: str | None = None,
     model_cfg_path: str = "configs/model.yaml",
     phase_cfg_path: str = "configs/phases.yaml",
     save_dir: str = "checkpoints",
@@ -68,6 +69,9 @@ def run_training(
     amp: bool = True,
 ) -> Trainer:
     """설정 파일을 읽고 학습기를 구성한 뒤 학습을 실행."""
+    if resume and init_from:
+        raise ValueError("--resume과 --init-from은 동시에 사용할 수 없습니다.")
+
     model_cfg = load_yaml(model_cfg_path)
     phases_yaml = load_yaml(phase_cfg_path)
     phase_yaml = phases_yaml[f"phase{phase}"]
@@ -119,6 +123,8 @@ def run_training(
 
     if resume:
         trainer.load_checkpoint(resume)
+    if init_from:
+        trainer.load_model_weights(init_from)
 
     trainer.train()
     return trainer
@@ -129,7 +135,9 @@ def main():
     parser = argparse.ArgumentParser(description="DualYOLO 학습")
     parser.add_argument("--phase", type=int, choices=[1, 2, 3], required=True)
     parser.add_argument("--resume", type=str, default=None,
-                        help="이전 페이즈 체크포인트 경로")
+                        help="같은 phase 중단 재개용 checkpoint 경로")
+    parser.add_argument("--init-from", type=str, default=None,
+                        help="이전 phase 모델 weight로 새 phase를 시작할 checkpoint 경로")
     parser.add_argument("--model-cfg", type=str,
                         default="configs/model.yaml")
     parser.add_argument("--phase-cfg", type=str,
@@ -145,6 +153,7 @@ def main():
     run_training(
         phase=args.phase,
         resume=args.resume,
+        init_from=args.init_from,
         model_cfg_path=args.model_cfg,
         phase_cfg_path=args.phase_cfg,
         save_dir=args.save_dir,

@@ -222,7 +222,7 @@ modality_dropout_prob: 0.05
 
 ```bash
 python tools/build_manifest_splits.py --phase phase2
-python train.py --phase 2 --resume checkpoints/phase1/best.pt
+python train.py --phase 2 --init-from checkpoints/phase1/best.pt
 ```
 
 결과:
@@ -307,7 +307,7 @@ hard_negative_sampling:
 
 ```bash
 python tools/build_manifest_splits.py --phase phase3
-python train.py --phase 3 --resume checkpoints/phase2/best.pt
+python train.py --phase 3 --init-from checkpoints/phase2/best.pt
 ```
 
 결과:
@@ -327,18 +327,22 @@ python tools/build_manifest_splits.py --phase phase1
 python train.py --phase 1
 
 python tools/build_manifest_splits.py --phase phase2
-python train.py --phase 2 --resume checkpoints/phase1/best.pt
+python train.py --phase 2 --init-from checkpoints/phase1/best.pt
 
 python tools/build_manifest_splits.py --phase phase3
-python train.py --phase 3 --resume checkpoints/phase2/best.pt
+python train.py --phase 3 --init-from checkpoints/phase2/best.pt
 ```
 
 Colab에서는 코드 셀에서 `!`를 붙여 실행합니다.
 
 ```python
 !python tools/build_manifest_splits.py --phase phase3
-!python train.py --phase 3 --resume checkpoints/phase2/best.pt
+!python train.py --phase 3 --init-from checkpoints/phase2/best.pt
 ```
+
+phase 전환에는 `--init-from`을 사용합니다.
+이전 phase의 모델 weight만 가져오고 optimizer, scheduler, epoch은 새 phase 기준으로 초기화합니다.
+`--resume`은 같은 phase 학습이 중간에 끊겼을 때 전체 상태를 이어받는 용도입니다.
 
 ---
 

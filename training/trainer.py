@@ -81,9 +81,58 @@ class Trainer:
         self.best_map50 = 0.0
 
     # ------------------------------------------------------------------
+    @staticmethod
+    def _looks_like_state_dict(value) -> bool:
+        return isinstance(value, dict) and value and all(
+            isinstance(k, str) and torch.is_tensor(v)
+            for k, v in value.items()
+        )
+
+    @staticmethod
+    def _strip_module_prefix(state_dict: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
+        if not any(key.startswith("module.") for key in state_dict):
+            return state_dict
+        return {
+            key.removeprefix("module."): value
+            for key, value in state_dict.items()
+        }
+
+    @classmethod
+    def _extract_model_state_dict(cls, checkpoint) -> dict[str, torch.Tensor]:
+        if cls._looks_like_state_dict(checkpoint):
+            return cls._strip_module_prefix(checkpoint)
+        if not isinstance(checkpoint, dict):
+            raise ValueError(
+                "checkpoint 형식을 해석하지 못했습니다. "
+                "model state_dict 또는 Trainer checkpoint를 사용해야 합니다."
+            )
+        for key in ("model", "model_state_dict", "state_dict"):
+            value = checkpoint.get(key)
+            if cls._looks_like_state_dict(value):
+                return cls._strip_module_prefix(value)
+        raise ValueError(
+            "checkpoint에서 model state_dict를 찾지 못했습니다. "
+            "지원 형식: raw state_dict, {'model': ...}, "
+            "{'model_state_dict': ...}, {'state_dict': ...}."
+        )
+
+    def load_model_weights(self, ckpt_path: str):
+        """phase 전환용: 모델 weight만 로드하고 학습 상태는 새로 시작."""
+        ckpt = torch.load(ckpt_path, map_location=self.device)
+        state_dict = self._extract_model_state_dict(ckpt)
+        self.model.load_state_dict(state_dict)
+        logger.info(f"{ckpt_path}에서 모델 weight만 초기화했습니다.")
+
     def load_checkpoint(self, ckpt_path: str):
         ckpt = torch.load(ckpt_path, map_location=self.device)
-        self.model.load_state_dict(ckpt["model"])
+        ckpt_phase = ckpt.get("phase") if isinstance(ckpt, dict) else None
+        if ckpt_phase is not None and int(ckpt_phase) != self.phase:
+            raise ValueError(
+                "--resume은 같은 phase 중단 재개 전용입니다. "
+                f"현재 phase={self.phase}, checkpoint phase={ckpt_phase}. "
+                "이전 phase weight로 새 phase를 시작하려면 --init-from을 사용하세요."
+            )
+        self.model.load_state_dict(self._extract_model_state_dict(ckpt))
         self.optimizer.load_state_dict(ckpt["optimizer"])
         if "scheduler" in ckpt:
             self.lr_scheduler.load_state_dict(ckpt["scheduler"])
