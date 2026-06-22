@@ -7,6 +7,7 @@ TRAINING_SMOKE_TEST.md
 !/data/external/
 !/data/external/*.py
 /checkpoints/
+/outputs/
 /weights/*.pt
 /weights/*.pth
 /weights/*.onnx
