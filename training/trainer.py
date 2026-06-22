@@ -193,7 +193,7 @@ class Trainer:
 
         # 모달리티 dropout(1단계)
         p_drop = self.cfg.modality_dropout_prob
-        if p_drop > 0:
+        if p_drop > 0 and rgb is not None and thermal is not None:
             drop_rgb = rgb is not None and torch.rand(1).item() < p_drop
             drop_thm = thermal is not None and torch.rand(1).item() < p_drop
             if drop_rgb and drop_thm:

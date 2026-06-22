@@ -55,6 +55,8 @@ def build_transforms(mode: str = "train", img_size: int = 640):
         label_fields=["labels"],
         min_area=64,
         min_visibility=0.3,
+        clip=True,
+        filter_invalid_bboxes=True,
     )
 
     if mode == "train":
