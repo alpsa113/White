@@ -1,8 +1,12 @@
 from fastapi import APIRouter, File, HTTPException, Query, UploadFile
 
+from tempfile import TemporaryDirectory
+from pathlib import Path
+
 from api.schemas.inference import ImagePredictionResponse
 from api.services.image_io import read_upload_rgb, read_upload_thermal
-from api.services.predictor_service import predict_image_arrays
+from api.services.video_io import save_upload_video
+from api.services.predictor_service import predict_image_arrays, predict_video_files
 
 router = APIRouter(prefix="/predict", tags=["predict"])
 
@@ -38,4 +42,74 @@ async def predict_image(
             nms=nms,
         )
     except FileNotFoundError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+        raise HTTPException(
+            status_code=503,
+            detail="추론 모델 checkpoint가 준비되지 않았습니다.",
+        ) from exc
+    except (ValueError, RuntimeError) as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="추론 모델을 로드하거나 실행하지 못했습니다.",
+        ) from exc
+    
+@router.post("/video")
+async def predict_video_endpoint(
+    rgb_video: UploadFile | None = File(default=None),
+    thermal_video: UploadFile | None = File(default=None),
+    conf: float = Query(default=0.25, ge=0.0, le=1.0),
+    nms: float = Query(default=0.6, ge=0.0, le=1.0),
+    frame_stride: int = Query(default=5, ge=1),
+    max_frames: int | None = Query(default=None, ge=1),
+):
+    if rgb_video is None and thermal_video is None:
+        raise HTTPException(
+            status_code=400,
+            detail="rgb_video 또는 thermal_video 중 하나는 필요합니다.",
+        )
+
+    with TemporaryDirectory() as tmp_dir:
+        tmp_path = Path(tmp_dir)
+
+        rgb_path = None
+        thermal_path = None
+
+        try:
+            if rgb_video is not None:
+                rgb_path = await save_upload_video(
+                    rgb_video,
+                    tmp_path / "rgb_video.mp4",
+                )
+
+            if thermal_video is not None:
+                thermal_path = await save_upload_video(
+                    thermal_video,
+                    tmp_path / "thermal_video.mp4",
+                )
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+        try:
+            return predict_video_files(
+                rgb_video_path=rgb_path,
+                thermal_video_path=thermal_path,
+                conf=conf,
+                nms=nms,
+                frame_stride=frame_stride,
+                max_frames=max_frames,
+            )
+        except FileNotFoundError as exc:
+            message = str(exc)
+            if "영상을 열지 못했습니다" in message:
+                raise HTTPException(
+                    status_code=400,
+                    detail="업로드한 파일을 영상으로 읽지 못했습니다.",
+                ) from exc
+            raise HTTPException(
+                status_code=503,
+                detail="추론 모델 checkpoint가 준비되지 않았습니다.",
+            ) from exc
+        except (ValueError, RuntimeError) as exc:
+            raise HTTPException(
+                status_code=503,
+                detail="추론 모델을 로드하거나 실행하지 못했습니다.",
+            ) from exc

@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from inference import DualYOLOPredictor
+from inference.video import predict_video
 
 
 _DEFAULT_CHECKPOINT = Path("checkpoints/phase3/best.pt")
@@ -44,6 +45,37 @@ def predict_image_arrays(
             thermal_image=thermal_image,
         )
         return result.to_dict()
+    finally:
+        predictor.conf_thresh = old_conf
+        predictor.nms_thresh = old_nms
+
+def predict_video_files(
+    rgb_video_path=None,
+    thermal_video_path=None,
+    conf=0.25,
+    nms=0.6,
+    frame_stride=5,
+    max_frames=None,
+) -> dict:
+    predictor = get_predictor()
+    old_conf = predictor.conf_thresh
+    old_nms = predictor.nms_thresh
+
+    try:
+        predictor.conf_thresh = conf
+        predictor.nms_thresh = nms
+        result = predict_video(
+            predictor=predictor,
+            rgb_video_path=rgb_video_path,
+            thermal_video_path=thermal_video_path,
+            output_video_path=None,
+            frame_stride=frame_stride,
+            max_frames=max_frames,
+        )
+        result["video"]["rgb_path"] = None
+        result["video"]["thermal_path"] = None
+        result["video"]["output_path"] = None
+        return result
     finally:
         predictor.conf_thresh = old_conf
         predictor.nms_thresh = old_nms
