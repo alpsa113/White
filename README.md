@@ -211,6 +211,7 @@ run_training(
 
 학습된 checkpoint는 이미지와 영상 추론에 사용할 수 있습니다.
 자세한 구조와 결과 JSON 형식은 [INFERENCE_PIPELINE.md](INFERENCE_PIPELINE.md)를 참고합니다.
+FastAPI 기반 이미지 추론 API는 [API_PIPELINE.md](API_PIPELINE.md)를 참고합니다.
 
 단일 RGB 이미지 예시:
 

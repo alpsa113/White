@@ -12,3 +12,6 @@ psutil>=5.8.0
 polars>=0.20.0
 nvidia-ml-py>=12.0.0
 ultralytics-thop>=2.0.18
+fastapi>=0.110.0
+uvicorn>=0.27.0
+python-multipart>=0.0.9
