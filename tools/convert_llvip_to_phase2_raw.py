@@ -13,6 +13,7 @@ LLVIP는 person 중심 데이터셋이므로 class id는 0으로 기록한다.
 
 import argparse
 import json
+import random
 import shutil
 import xml.etree.ElementTree as ET
 from pathlib import Path
@@ -121,6 +122,8 @@ def convert_llvip(
     split: str = "train",
     ann_file: Path | None = None,
     overwrite: bool = False,
+    max_samples: int | None = None,
+    seed: int = 42,
 ) -> int:
     visible_dir = root / "visible" / split
     infrared_dir = root / "infrared" / split
@@ -139,8 +142,14 @@ def convert_llvip(
     for path in (rgb_img_dir, rgb_label_dir, tir_img_dir, tir_label_dir):
         path.mkdir(parents=True, exist_ok=True)
 
+    rgb_images = _iter_visible_images(visible_dir)
+    if max_samples is not None:
+        rng = random.Random(seed)
+        rng.shuffle(rgb_images)
+        rgb_images = sorted(rgb_images[:max_samples])
+
     converted = 0
-    for rgb_path in _iter_visible_images(visible_dir):
+    for rgb_path in rgb_images:
         stem = rgb_path.stem
         tir_path = _find_image_by_stem(infrared_dir, stem)
         if tir_path is None:
@@ -181,6 +190,8 @@ def main():
     parser.add_argument("--output", default="data/phase2_raw/pair", help="출력 pair 루트")
     parser.add_argument("--ann-file", default=None, help="선택 COCO JSON annotation")
     parser.add_argument("--overwrite", action="store_true", help="기존 출력 파일 덮어쓰기")
+    parser.add_argument("--max-samples", type=int, default=None, help="변환할 최대 pair 수")
+    parser.add_argument("--seed", type=int, default=42, help="샘플링 seed")
     args = parser.parse_args()
 
     count = convert_llvip(
@@ -189,6 +200,8 @@ def main():
         split=args.split,
         ann_file=Path(args.ann_file) if args.ann_file else None,
         overwrite=args.overwrite,
+        max_samples=args.max_samples,
+        seed=args.seed,
     )
     print(f"LLVIP 변환 완료: {count}개 pair")
 

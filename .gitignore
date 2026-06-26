@@ -1,4 +1,5 @@
 .DS_Store
+.Rhistory
 __pycache__/
 *.py[cod]
 TRAINING_SMOKE_TEST.md
