@@ -1,0 +1,39 @@
+# YOLO11m 백본 비교 실험용 DualYOLO 모델 설정
+
+model:
+  fusion_dim: 256
+  fpn_dim: 256
+  cond_dim: 3
+  backbone:
+    name: yolo11m
+    provider: local_checkpoint
+    provider_code: vendor/yolo26
+    weights: weights/yolo11m.pt
+    rgb_pretrained: true
+    thm_pretrained: true
+    c3_layer: auto
+    c4_layer: auto
+    input_size: 640
+    expected_c3_channels: 512
+    expected_c4_channels: 512
+    strict_shapes: true
+
+training:
+  img_size: 640
+  batch_size: 4
+  grad_accum_steps: 2
+  num_workers: 4
+  amp: true
+
+# 클래스 정의 (ID 고정)
+classes:
+  - person      # 0
+  - boar        # 1
+  - deer        # 2
+  - non_target  # 3
+
+# 조건벡터 차원 정의 (참고용)
+cond_vec_dims:
+  0: weather
+  1: temp_c
+  2: illuminance

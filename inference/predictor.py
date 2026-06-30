@@ -107,7 +107,7 @@ class DualYOLOPredictor:
         if "ema" in checkpoint or "train_args" in checkpoint:
             raise ValueError(
                 "Ultralytics checkpoint로 보입니다. "
-                "추론에는 weights/yolo26m-coco.pt가 아니라 "
+                "추론에는 사전학습 백본 weight가 아니라 "
                 "DualYOLO 학습 결과 checkpoint(checkpoints/phase*/best.pt)를 사용해야 합니다."
             )
 
