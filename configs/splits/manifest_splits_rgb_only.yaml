@@ -1,0 +1,50 @@
+# RGB-only ablation용 manifest 생성 설정입니다.
+# Phase2는 RGB-TIR pair fusion 학습 단계이므로 RGB-only 실험에서는 생략합니다.
+
+seed: 42
+val_ratio: 0.2
+output_dir: data/manifests_rgb_only
+
+phases:
+  phase1:
+    val_ratio: 0.2
+    sources:
+      - name: phase1_rgb_only
+        format: gop_class_yolo
+        root: data/phase1_raw/single
+        classes: [0, 1, 2, 3]
+        include_modalities: [rgb]
+        modality_dirs:
+          rgb: rgb
+        image_dir: img
+        label_dir: label
+        strict_label_match: true
+        cond_vec_by_modality:
+          rgb: [0.0, 0.5, 1.0]
+
+  phase3:
+    val_ratio: 0.2
+    sources:
+      - name: gop_rgb_only
+        format: gop_class_yolo
+        root: data/gop_raw/single
+        classes: [0, 1, 2, 3]
+        include_modalities: [rgb]
+        modality_dirs:
+          rgb: rgb
+        image_dir: img
+        label_dir: label
+        strict_label_match: true
+        cond_vec_by_modality:
+          rgb: [0.0, 0.5, 1.0]
+
+      - name: gop_empty_background_rgb
+        format: gop_empty_folder
+        root: data/gop_raw/empty
+        include_modalities: [rgb]
+        modality_dirs:
+          rgb: rgb
+        image_dir: img
+        cond_vec_by_modality:
+          rgb: [0.0, 0.5, 1.0]
+        tags: [empty_background]
