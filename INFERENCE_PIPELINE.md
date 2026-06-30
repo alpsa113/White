@@ -144,6 +144,8 @@ python tools/predict_video.py \
 ## frame-stride 기준
 
 `frame_stride`는 몇 프레임마다 한 번 추론할지 정하는 값이다.
+CLI 기본값은 `1`이며, API 기본값은 운영 비용을 고려해 `5`로 둔다.
+GOP 1분 내외 영상의 시작값은 `5`를 권장한다.
 
 ```text
 frame_stride = 원본 FPS / 목표 추론 FPS
@@ -159,7 +161,7 @@ frame_stride 10 -> 3fps 추론, 1분에 180프레임
 frame_stride 30 -> 1fps 추론, 1분에 60프레임
 ```
 
-현재 프로젝트의 1분 내외 GOP 영상 추론 시작값은 `--frame-stride 5`를 권장한다. 처리 시간이 길면 `10`으로 올리고, 객체를 놓치는 구간이 많으면 `3`으로 낮춘다.
+처리 시간이 길면 `10`으로 올리고, 객체를 놓치는 구간이 많으면 `3`으로 낮춘다.
 
 ## 샘플 영상
 
@@ -218,7 +220,7 @@ fps: 10.0
 
 ## confidence 관련 주의사항
 
-현재 테스트 checkpoint는 confidence가 매우 낮아 기본값 `--conf 0.25`에서 detection이 0개일 수 있다. bbox 시각화 코드가 동작하는지만 확인하려면 아래처럼 임시 threshold를 낮춘다.
+미니테스트 또는 초기 checkpoint는 confidence가 낮아 기본값 `--conf 0.25`에서 detection이 0개일 수 있다. bbox 시각화 코드가 동작하는지만 확인하려면 아래처럼 임시 threshold를 낮춘다.
 
 ```bash
 python tools/predict_video.py \

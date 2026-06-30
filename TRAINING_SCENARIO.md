@@ -189,6 +189,17 @@ python tools/convert_llvip_to_phase2_raw.py \
 ```
 
 LLVIP는 person 중심이므로 변환 결과는 `data/phase2_raw/pair/0/` 아래에 생성됩니다.
+미니테스트에서는 `--max-samples`, `--seed`로 변환 수를 고정할 수 있습니다.
+
+```bash
+python tools/convert_llvip_to_phase2_raw.py \
+  --root data/llvip \
+  --split train \
+  --output data/mini_test/phase2_raw/pair \
+  --max-samples 3000 \
+  --seed 42 \
+  --overwrite
+```
 
 ### Synthetic boar/deer pair
 
@@ -374,7 +385,98 @@ phase2에 `rgb` 또는 `thermal` 단독 sample이 들어가면 설정상 학습 
 
 ---
 
-## 7. 현재 남은 실데이터 검증 항목
+## 7. Mini Test 구성
+
+미니테스트는 실제 전체 데이터를 모두 쓰지 않고 `data/mini_test/` 아래에 subset을 구성해 phase 흐름과 초기 성능 경향을 확인하는 용도입니다.
+
+```text
+data/mini_test/
+  phase1_raw/
+  phase2_raw/
+  gop_raw/
+```
+
+기존 raw/GOP 데이터 subset은 아래 도구로 복사합니다.
+
+```bash
+python tools/build_mini_dataset.py --dry-run
+python tools/build_mini_dataset.py --overwrite
+```
+
+ForestPersons person RGB subset은 원본을 보존하고 mini_test 쪽으로만 변환할 수 있습니다.
+
+```bash
+python tools/convert_forestpersons_phase.py \
+  --phase1-output data/mini_test/phase1_raw/single \
+  --phase3-output data/mini_test/gop_raw/single \
+  --metadata-output data/mini_test/forestpersons_conversion_metadata.csv \
+  --phase1-count 1500 \
+  --phase3-count 2500 \
+  --overwrite
+```
+
+manifest 생성:
+
+```bash
+python tools/build_manifest_splits.py \
+  --config configs/splits/manifest_splits_mini.yaml
+```
+
+기본 `configs/phases.yaml`을 그대로 쓰려면 생성된 manifest를 `data/manifests/`로 복사합니다.
+
+```bash
+mkdir -p data/manifests
+cp data/mini_test/manifests/*.json data/manifests/
+```
+
+미니테스트에서 uncertainty head 영향을 제거하고 비교하려면 Colab 또는 로컬 실험 설정에서 아래처럼 둡니다.
+
+```yaml
+phase2:
+  uncertainty_active: false
+  uncertainty_start_epoch: null
+
+phase3:
+  uncertainty_active: false
+  uncertainty_start_epoch: null
+```
+
+---
+
+## 8. RGB-only Ablation
+
+RGB-only 비교군은 thermal 입력과 phase2 pair fusion 학습을 제거한 ablation입니다. 모델 코드는 재사용하고, manifest/config만 분리합니다.
+
+사용 파일:
+
+```text
+configs/splits/manifest_splits_rgb_only.yaml
+configs/phases_rgb_only.yaml
+```
+
+실행 순서:
+
+```bash
+python tools/build_manifest_splits.py \
+  --config configs/splits/manifest_splits_rgb_only.yaml
+
+python train.py \
+  --phase 1 \
+  --phase-cfg configs/phases_rgb_only.yaml \
+  --save-dir checkpoints_rgb_only
+
+python train.py \
+  --phase 3 \
+  --init-from checkpoints_rgb_only/phase1/best.pt \
+  --phase-cfg configs/phases_rgb_only.yaml \
+  --save-dir checkpoints_rgb_only
+```
+
+Phase2는 RGB-TIR pair fusion 학습 단계이므로 RGB-only ablation에서는 실행하지 않습니다.
+
+---
+
+## 9. 현재 남은 실데이터 검증 항목
 
 | 항목 | 확인 내용 |
 |------|-----------|

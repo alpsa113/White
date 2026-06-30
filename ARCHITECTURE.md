@@ -15,6 +15,7 @@
 | v0.6.1 | 2026-06-22 | phase 전환용 `--init-from`과 같은 phase 재개용 `--resume` 분리 |
 | v0.6.2 | 2026-06-22 | 이미지/영상 추론 모듈, CLI, 추론 파이프라인 문서 반영 |
 | v0.6.3 | 2026-06-24 | 모델 아키텍처 SVG 다이어그램 추가 |
+| v0.6.4 | 2026-06-30 | mini_test/RGB-only ablation config, ForestPersons 변환, uncertainty schedule 명시화 |
 
 ---
 
@@ -52,7 +53,7 @@ Multi-Scale Detection Heads
 
 조건부 분기
   AuxHead: Phase 1/2
-  UncertaintyHead: Phase 2 후반 ~ Phase 3
+  UncertaintyHead: uncertainty_start_epoch 이후 활성화
 ```
 
 ---
@@ -136,7 +137,8 @@ obj: objectness logit
 ### Aux / Uncertainty
 
 - AuxHead는 person/boar/deer 3클래스 보조 분류를 수행합니다. `non_target`과 empty는 aux label에서 제외됩니다.
-- UncertaintyHead는 Phase 2 후반부터 cls/reg loss를 heteroscedastic NLL 형태로 대체합니다.
+- UncertaintyHead는 `configs/phases.yaml`의 `uncertainty_start_epoch`에 도달하면 cls/reg loss를 heteroscedastic NLL 형태로 대체합니다.
+- 미니테스트나 ablation에서 끄려면 `uncertainty_active: false`, `uncertainty_start_epoch: null`을 사용합니다.
 
 ---
 
@@ -193,6 +195,9 @@ manifest 생성 도구는 loader registry를 사용합니다.
 ```text
 tools/
   build_manifest_splits.py
+  build_mini_dataset.py
+  convert_forestpersons_phase.py
+  convert_llvip_to_phase2_raw.py
   manifest_loaders/
     common.py
     gop.py
@@ -212,6 +217,15 @@ tools/
 | `manifest` | 기존 manifest 재사용 |
 
 현재 기본 phase 설정은 표준 raw 구조를 사용합니다. COCO/YOLO/KAIST loader는 호환용으로 유지됩니다.
+
+실험용 split config:
+
+| config | 역할 |
+|--------|------|
+| `configs/splits/manifest_splits.yaml` | 기본 phase1/2/3 manifest 생성 |
+| `configs/splits/manifest_splits_mini.yaml` | `data/mini_test` 기준 미니테스트 manifest 생성 |
+| `configs/splits/manifest_splits_rgb_only.yaml` | RGB-only ablation용 manifest 생성 |
+| `configs/splits/manifest_splits_legacy.yaml` | 외부/레거시 source 예시 |
 
 ---
 
@@ -306,11 +320,19 @@ run_training(
 ```text
 run_training()
   → configs/model.yaml 로드
-  → configs/phases.yaml 로드
+  → configs/phases.yaml 또는 --phase-cfg 경로 로드
   → build_loaders()
   → DualYOLO 생성
   → Trainer 생성
   → trainer.train()
+```
+
+RGB-only ablation은 `configs/phases_rgb_only.yaml`을 사용하고 phase2를 생략합니다.
+
+```bash
+python tools/build_manifest_splits.py --config configs/splits/manifest_splits_rgb_only.yaml
+python train.py --phase 1 --phase-cfg configs/phases_rgb_only.yaml --save-dir checkpoints_rgb_only
+python train.py --phase 3 --init-from checkpoints_rgb_only/phase1/best.pt --phase-cfg configs/phases_rgb_only.yaml --save-dir checkpoints_rgb_only
 ```
 
 ---
@@ -358,6 +380,8 @@ tools/
 | 실제 phase1/2/3 데이터 배치 후 manifest 통계 검증 | 필요 |
 | LLVIP + boar/deer synthetic pair 비율 실험 | 필요 |
 | phase3 hard negative weight 검증 | 필요 |
+| RGB-only ablation 결과와 DualYOLO 결과 비교 | 진행 예정 |
+| YOLOv8 backbone baseline 구현/비교 | 진행 예정 |
 | 동적 target assignment 개선 검토 | 추후 |
 | FastAPI/Streamlit 서비스 API 연동 | 추후 |
 | 실시간 스트림 추론 최적화 | 추후 |

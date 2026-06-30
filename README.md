@@ -18,9 +18,12 @@ Phase 3: GOP 실제 환경 fine-tuning
 configs/
   model.yaml                     # 모델, 백본 weight, 학습 기본 설정
   phases.yaml                    # 단계별 학습 설정
+  phases_rgb_only.yaml           # RGB-only ablation 학습 설정
   splits/manifest_splits.yaml    # raw 데이터 → manifest 분할 설정
   splits/manifest_splits_mini.yaml
                                  # mini_test 데이터셋용 manifest 분할 설정
+  splits/manifest_splits_rgb_only.yaml
+                                 # RGB-only ablation용 manifest 분할 설정
   splits/manifest_splits_legacy.yaml
                                  # 외부/레거시 데이터셋 source 예시
 data/
@@ -33,6 +36,8 @@ inference/                       # 이미지/영상 추론, 전처리/후처리,
 model/                           # DualYOLO, 백본, 융합, FPN, 헤드
 tools/
   build_manifest_splits.py       # phase별 manifest 생성
+  build_mini_dataset.py          # raw 데이터 일부를 mini_test subset으로 복사
+  convert_forestpersons_phase.py # ForestPersons → phase1/phase3 single 변환
   convert_llvip_to_phase2_raw.py # LLVIP → phase2_raw/pair 변환
   predict_image.py               # 단일 이미지 추론 CLI
   predict_video.py               # 영상 추론 CLI
@@ -142,6 +147,37 @@ python tools/convert_llvip_to_phase2_raw.py \
 
 LLVIP는 person 중심 데이터셋이므로 변환 결과는 `data/phase2_raw/pair/0/` 아래에 생성됩니다.
 boar/deer synthetic pair가 있다면 같은 구조의 `1/`, `2/` 아래에 추가합니다.
+미니테스트처럼 일부만 변환하려면 `--max-samples`, `--seed`를 사용합니다.
+
+```bash
+python tools/convert_llvip_to_phase2_raw.py \
+  --root data/llvip \
+  --split train \
+  --output data/mini_test/phase2_raw/pair \
+  --max-samples 3000 \
+  --seed 42 \
+  --overwrite
+```
+
+## Mini Test / ForestPersons
+
+미니 성능 테스트는 `data/mini_test/` 아래에 phase별 raw 구조를 따로 구성해 실행합니다.
+
+```bash
+python tools/build_mini_dataset.py --dry-run
+python tools/build_mini_dataset.py --overwrite
+```
+
+ForestPersons는 person RGB 데이터로만 사용하며, 원본은 보존하고 선택된 subset만 변환합니다.
+
+```bash
+python tools/convert_forestpersons_phase.py \
+  --phase1-output data/mini_test/phase1_raw/single \
+  --phase3-output data/mini_test/gop_raw/single \
+  --phase1-count 1500 \
+  --phase3-count 2500 \
+  --overwrite
+```
 
 ## Manifest 생성
 
@@ -166,6 +202,13 @@ data/manifests/phase3_val.json
 
 manifest 생성 시 source, 모달리티, 클래스, tag, 빈 라벨 이미지 통계가 출력됩니다.
 실제 학습 전에 이 분포를 확인합니다.
+
+미니테스트와 RGB-only ablation은 각각 별도 split config를 사용합니다.
+
+```bash
+python tools/build_manifest_splits.py --config configs/splits/manifest_splits_mini.yaml
+python tools/build_manifest_splits.py --config configs/splits/manifest_splits_rgb_only.yaml
+```
 
 ## 학습 실행
 
@@ -207,6 +250,28 @@ run_training(
     init_from="checkpoints/phase2/best.pt",
     device="cuda",
 )
+```
+
+## RGB-only Ablation
+
+RGB-only 비교군은 DualYOLO 구조를 유지하되 RGB 샘플만 사용하고 phase2 pair fusion 학습은 생략합니다.
+
+```bash
+python tools/build_manifest_splits.py \
+  --config configs/splits/manifest_splits_rgb_only.yaml
+
+python train.py \
+  --phase 1 \
+  --phase-cfg configs/phases_rgb_only.yaml \
+  --save-dir checkpoints_rgb_only \
+  --device cuda
+
+python train.py \
+  --phase 3 \
+  --init-from checkpoints_rgb_only/phase1/best.pt \
+  --phase-cfg configs/phases_rgb_only.yaml \
+  --save-dir checkpoints_rgb_only \
+  --device cuda
 ```
 
 ## 추론 실행

@@ -21,7 +21,7 @@ api/
   main.py                    # FastAPI 앱 생성과 router 등록
   routes/
     health.py                # /health endpoint
-    inference.py             # /predict/image endpoint
+    inference.py             # /predict/image, /predict/video endpoint
   schemas/
     inference.py             # API 응답 schema
   services/
@@ -244,3 +244,4 @@ max_frames: 2
 - 동시 요청이 많아지는 운영 환경에서는 `DualYOLOPredictor.predict()`가 요청별 `conf`, `nms`를 직접 받도록 개선하는 것이 좋다.
 - 영상 API는 현재 JSON 응답만 반환하며, 결과 영상 파일 저장은 아직 연결하지 않았다.
 - DB 저장, FastAPI-Streamlit 연동, AWS RDS MySQL 기록 구조는 이후 단계에서 추가한다.
+- 초기 서비스 단계에서는 로컬 저장소를 사용할 수 있지만, 다중 사용자/배포 환경에서는 S3 같은 object storage 연결을 검토한다.
