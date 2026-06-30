@@ -16,7 +16,7 @@ import torch
 import torch.nn as nn
 
 
-class YOLO26Backbone(nn.Module):
+class TruncatedYOLOBackbone(nn.Module):
     """YOLO 계열 탐지 checkpoint를 C4까지만 사용하는 래퍼."""
 
     def __init__(
@@ -214,8 +214,8 @@ class DualBackbone(nn.Module):
             "expected_c4_channels": int(cfg.get("expected_c4_channels", 512)),
             "strict_shapes": bool(cfg.get("strict_shapes", True)),
         }
-        self.rgb = YOLO26Backbone(rgb_model, input_channels=3, **wrapper_kwargs)
-        self.thm = YOLO26Backbone(thm_model, input_channels=1, **wrapper_kwargs)
+        self.rgb = TruncatedYOLOBackbone(rgb_model, input_channels=3, **wrapper_kwargs)
+        self.thm = TruncatedYOLOBackbone(thm_model, input_channels=1, **wrapper_kwargs)
 
     def forward(
         self,
