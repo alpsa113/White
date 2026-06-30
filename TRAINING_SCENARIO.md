@@ -211,12 +211,15 @@ phase3는 실제 GOP 환경 적응 단계로 남겨두는 것이 좋습니다.
 
 ```yaml
 aux_active: true
-uncertainty_active: false   # 후반부 자동 활성화
+uncertainty_active: false
+uncertainty_start_epoch: 10
 fusion_reg_active: true
 modality_dropout_prob: 0.05
 ```
 
-`PhaseScheduler`는 phase2 후반부부터 uncertainty head를 활성화합니다.
+`PhaseScheduler`는 `uncertainty_start_epoch`에 도달하면 uncertainty head를 활성화합니다.
+미니테스트처럼 uncertainty를 끄고 비교하려면 `uncertainty_active: false`,
+`uncertainty_start_epoch: null`로 설정합니다.
 
 ### 실행
 
@@ -295,6 +298,7 @@ empty background를 `single/3`에 넣지 않습니다.
 ```yaml
 aux_active: false
 uncertainty_active: true
+uncertainty_start_epoch: 0
 fusion_reg_active: true
 backbone_unfreeze_epoch: 8
 hard_negative_sampling:

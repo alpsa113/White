@@ -20,6 +20,7 @@ class PhaseConfig:
     # 활성화 플래그
     aux_active: bool = True
     uncertainty_active: bool = False
+    uncertainty_start_epoch: int | None = None
     fusion_reg_active: bool = False
 
     # 3단계 전용: 백본 동결 → 해제 전환 epoch
@@ -56,7 +57,8 @@ PHASE_DEFAULTS: dict[int, PhaseConfig] = {
         phase=2,
         max_epochs=20,
         aux_active=True,
-        uncertainty_active=False,   # 후반부에 True로 전환
+        uncertainty_active=False,
+        uncertainty_start_epoch=10,
         fusion_reg_active=True,
         allow_rgb_only=False,
         allow_thm_only=False,
@@ -68,6 +70,7 @@ PHASE_DEFAULTS: dict[int, PhaseConfig] = {
         max_epochs=15,
         aux_active=False,
         uncertainty_active=True,
+        uncertainty_start_epoch=0,
         fusion_reg_active=True,
         allow_rgb_only=True,
         allow_thm_only=True,
@@ -118,9 +121,6 @@ class PhaseScheduler:
         self.lr_scheduler = lr_scheduler
         self._backbone_unfrozen = False
 
-        # 2단계: 중간 epoch에서 불확실성 헤드 활성화
-        self._unc_activate_epoch = self.cfg.max_epochs // 2
-
         # 3단계: 시작 시 백본 동결
         if phase == 3:
             model.freeze_backbone()
@@ -131,11 +131,9 @@ class PhaseScheduler:
         m = self.model
         m.set_aux_active(self.cfg.aux_active)
 
-        if self.phase == 2 and epoch >= self._unc_activate_epoch:
-            m.set_uncertainty_active(True)
-        elif self.phase == 2:
-            m.set_uncertainty_active(False)
-        elif self.phase != 2:
+        if self.cfg.uncertainty_start_epoch is not None:
+            m.set_uncertainty_active(epoch >= self.cfg.uncertainty_start_epoch)
+        else:
             m.set_uncertainty_active(self.cfg.uncertainty_active)
 
     def step(self, epoch: int):

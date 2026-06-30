@@ -22,7 +22,8 @@ phase1:
 phase2:
   max_epochs: 20
   aux_active: true
-  uncertainty_active: false   # 10 epoch부터 자동 활성화
+  uncertainty_active: false
+  uncertainty_start_epoch: 10
   fusion_reg_active: true
   allow_rgb_only: false
   allow_thm_only: false
@@ -42,6 +43,7 @@ phase3:
   max_epochs: 15
   aux_active: false
   uncertainty_active: true
+  uncertainty_start_epoch: 0
   fusion_reg_active: true
   backbone_unfreeze_epoch: 8
   hard_negative_sampling:
