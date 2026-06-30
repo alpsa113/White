@@ -19,7 +19,9 @@ configs/
   model.yaml                     # 모델, 백본 weight, 학습 기본 설정
   phases.yaml                    # 단계별 학습 설정
   splits/manifest_splits.yaml    # raw 데이터 → manifest 분할 설정
-  splits/manifest_splits_examples.yaml
+  splits/manifest_splits_mini.yaml
+                                 # mini_test 데이터셋용 manifest 분할 설정
+  splits/manifest_splits_legacy.yaml
                                  # 외부/레거시 데이터셋 source 예시
 data/
   dataset.py                     # ManifestDetectionDataset
