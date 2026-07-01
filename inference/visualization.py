@@ -21,7 +21,12 @@ def draw_detections_rgb(image: np.ndarray, detections: list[dict]) -> np.ndarray
         score = det["score"]
         color = COLORS.get(class_name, (255, 255, 255))
         cv2.rectangle(canvas, (x1, y1), (x2, y2), color, 2)
-        label = f"{class_name} {score:.2f}"
+        track_id = det.get("track_id")
+        label = (
+            f"{class_name} #{track_id} {score:.2f}"
+            if track_id is not None
+            else f"{class_name} {score:.2f}"
+        )
         cv2.putText(
             canvas,
             label,

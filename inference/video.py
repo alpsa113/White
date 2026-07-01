@@ -5,6 +5,7 @@ from pathlib import Path
 import cv2
 
 from .predictor import DualYOLOPredictor
+from .tracking import SimpleByteTracker
 from .visualization import draw_detections_rgb
 
 
@@ -44,6 +45,15 @@ def predict_video(
     frame_stride: int = 1,
     max_frames: int | None = None,
     cond_vec: list[float] | tuple[float, ...] | None = None,
+    use_tracking: bool = False,
+    track_high_thresh: float = 0.25,
+    track_low_thresh: float = 0.10,
+    track_match_thresh: float = 0.35,
+    track_buffer: int = 8,
+    track_smooth_alpha: float = 0.7,
+    track_min_area_ratio: float = 0.4,
+    track_max_area_ratio: float = 2.5,
+    track_min_hits: int = 1,
 ) -> dict:
     """영상 프레임을 순회하며 기존 단일 이미지 추론기를 호출."""
     if rgb_video_path is None and thermal_video_path is None:
@@ -68,6 +78,20 @@ def predict_video(
     writer = None
     if output_video_path:
         writer = _make_writer(output_video_path, fps, width, height)
+    tracker = (
+        SimpleByteTracker(
+            track_high_thresh=track_high_thresh,
+            track_low_thresh=track_low_thresh,
+            match_thresh=track_match_thresh,
+            track_buffer=track_buffer,
+            smooth_alpha=track_smooth_alpha,
+            min_area_ratio=track_min_area_ratio,
+            max_area_ratio=track_max_area_ratio,
+            min_hits=track_min_hits,
+        )
+        if use_tracking
+        else None
+    )
 
     frames: list[dict] = []
     frame_index = 0
@@ -106,6 +130,8 @@ def predict_video(
                     cond_vec=cond_vec,
                 )
                 result_dict = result.to_dict()
+                if tracker is not None:
+                    result_dict["detections"] = tracker.update(result_dict["detections"])
                 frames.append(
                     {
                         "frame_index": frame_index,
@@ -144,6 +170,7 @@ def predict_video(
             "total_frames": total_frames,
             "frame_stride": frame_stride,
             "processed_frames": processed_frames,
+            "tracking": use_tracking,
         },
         "frames": frames,
     }

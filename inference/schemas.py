@@ -38,6 +38,7 @@ class Detection:
     class_name: str
     score: float
     bbox: list[float]
+    track_id: int | None = None
 
     def to_dict(self) -> dict:
         return asdict(self)
