@@ -37,6 +37,15 @@ def main():
     parser.add_argument("--nms", type=float, default=0.6)
     parser.add_argument("--frame-stride", type=int, default=1)
     parser.add_argument("--max-frames", type=int, default=None)
+    parser.add_argument("--track", action="store_true", help="영상 프레임 간 bbox tracking 적용")
+    parser.add_argument("--track-high-thresh", type=float, default=0.25)
+    parser.add_argument("--track-low-thresh", type=float, default=0.10)
+    parser.add_argument("--track-match-thresh", type=float, default=0.35)
+    parser.add_argument("--track-buffer", type=int, default=8)
+    parser.add_argument("--track-smooth-alpha", type=float, default=0.7)
+    parser.add_argument("--track-min-area-ratio", type=float, default=0.4)
+    parser.add_argument("--track-max-area-ratio", type=float, default=2.5)
+    parser.add_argument("--track-min-hits", type=int, default=1)
     args = parser.parse_args()
 
     rgb_video = args.rgb_video or args.video
@@ -58,6 +67,15 @@ def main():
         frame_stride=args.frame_stride,
         max_frames=args.max_frames,
         cond_vec=_parse_cond_vec(args.cond_vec),
+        use_tracking=args.track,
+        track_high_thresh=args.track_high_thresh,
+        track_low_thresh=args.track_low_thresh,
+        track_match_thresh=args.track_match_thresh,
+        track_buffer=args.track_buffer,
+        track_smooth_alpha=args.track_smooth_alpha,
+        track_min_area_ratio=args.track_min_area_ratio,
+        track_max_area_ratio=args.track_max_area_ratio,
+        track_min_hits=args.track_min_hits,
     )
     print(json.dumps(result, ensure_ascii=False, indent=2))
 
