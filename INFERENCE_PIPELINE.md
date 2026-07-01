@@ -6,6 +6,7 @@
 
 - 단일 이미지 추론 코드 작성 완료
 - 영상 추론 코드 작성 완료
+- 영상 tracking 옵션 작성 완료
 - RGB-only, thermal-only, RGB+thermal pair 입력 smoke test 완료
 - 결과 JSON 저장 확인
 - bbox 시각화 이미지/영상 저장 확인
@@ -22,6 +23,7 @@ inference/
   postprocessing.py   # 모델 출력 decode, NMS, 원본 좌표 복원
   predictor.py        # checkpoint 로드와 단일 이미지 추론 래퍼
   visualization.py    # bbox 시각화 공통 함수
+  tracking.py         # 영상 프레임 간 bbox tracking
   video.py            # 영상 프레임 순회와 프레임별 추론
 
 tools/
@@ -87,6 +89,7 @@ python tools/predict_image.py \
 → frame_stride 기준으로 추론할 프레임 선택
 → 프레임을 RGB 또는 thermal 이미지로 변환
 → 기존 이미지 추론기 호출
+→ 필요 시 tracking으로 프레임 간 bbox 연결
 → 프레임별 detection 결과 저장
 → 필요 시 bbox가 그려진 영상 저장
 ```
@@ -140,6 +143,49 @@ python tools/predict_video.py \
   --frame-stride 5 \
   --max-frames 10
 ```
+
+## 영상 tracking 옵션
+
+영상에서 객체 bbox가 프레임마다 흔들리거나 짧게 사라지는 경우 `--track`을 켠다. 현재 구현은 detection bbox끼리 IoU로 연결하는 간단한 ByteTrack 스타일 tracking이다.
+
+```bash
+python tools/predict_video.py \
+  --checkpoint checkpoints/phase3/best.pt \
+  --video data/inference/video/sample_rgb_video.mp4 \
+  --output outputs/pred_sample_video_track.mp4 \
+  --json outputs/pred_sample_video_track.json \
+  --device cpu \
+  --frame-stride 1 \
+  --conf 0.18 \
+  --nms 0.40 \
+  --track \
+  --track-high-thresh 0.35 \
+  --track-low-thresh 0.18 \
+  --track-match-thresh 0.30 \
+  --track-buffer 6 \
+  --track-min-hits 4
+```
+
+주요 파라미터:
+
+```text
+--track-high-thresh   새 track을 만들 confidence 기준
+--track-low-thresh    기존 track을 이어 붙일 낮은 confidence 후보 기준
+--track-match-thresh  이전 bbox와 현재 bbox를 같은 객체로 볼 IoU 기준
+--track-buffer        짧은 미탐이 있어도 track을 유지할 프레임 수
+--track-min-hits      결과에 표시하기 전 필요한 최소 연속 관측 수
+```
+
+초기 권장값:
+
+```text
+깜빡임이 심함        -> track-buffer를 8~12로 올림
+배경 오탐이 많음     -> track-high-thresh를 0.40 이상으로 올림
+장면 전환 직후 오탐  -> track-min-hits를 4~6으로 올림
+객체 표시가 늦음     -> track-min-hits를 2~3으로 낮춤
+```
+
+현재 tracking은 장면 전환을 별도로 감지하지 않는다. 장면 전환 직후 0.3~0.6초 정도의 일시적 오탐/미탐은 남을 수 있으며, 이후 scene-change 감지와 전환 직후 보수 모드로 개선한다.
 
 ## frame-stride 기준
 
@@ -195,7 +241,8 @@ fps: 10.0
     "height": 360,
     "total_frames": 30,
     "frame_stride": 5,
-    "processed_frames": 6
+    "processed_frames": 6,
+    "tracking": true
   },
   "frames": [
     {
@@ -206,7 +253,8 @@ fps: 10.0
           "class_id": 0,
           "class_name": "person",
           "score": 0.91,
-          "bbox": [120.5, 80.0, 240.5, 300.0]
+          "bbox": [120.5, 80.0, 240.5, 300.0],
+          "track_id": 1
         }
       ],
       "latency_ms": 12.4,
