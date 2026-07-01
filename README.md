@@ -300,10 +300,17 @@ python tools/predict_video.py \
   --output outputs/pred_sample_video.mp4 \
   --json outputs/pred_sample_video.json \
   --device cpu \
-  --frame-stride 5
+  --frame-stride 1 \
+  --track \
+  --track-high-thresh 0.35 \
+  --track-low-thresh 0.18 \
+  --track-match-thresh 0.30 \
+  --track-buffer 6 \
+  --track-min-hits 4
 ```
 
 현재 테스트용 checkpoint는 confidence가 낮을 수 있습니다. bbox 시각화 동작만 확인하려면 임시로 `--conf 0.0001`처럼 낮은 값을 사용할 수 있지만, 실제 검증에서는 충분히 학습된 checkpoint 기준으로 threshold를 다시 잡아야 합니다.
+영상에서 `--track`을 켜면 프레임 간 bbox 흔들림과 짧은 미탐을 줄일 수 있습니다. 장면 전환 직후 오탐이 남으면 `--track-high-thresh`, `--track-min-hits`를 높여 보수적으로 조정합니다.
 
 ## Git 관리 정책
 

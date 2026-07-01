@@ -56,6 +56,15 @@ def predict_video_files(
     nms=0.6,
     frame_stride=5,
     max_frames=None,
+    use_tracking=False,
+    track_high_thresh=0.25,
+    track_low_thresh=0.10,
+    track_match_thresh=0.35,
+    track_buffer=8,
+    track_smooth_alpha=0.7,
+    track_min_area_ratio=0.4,
+    track_max_area_ratio=2.5,
+    track_min_hits=1,
 ) -> dict:
     predictor = get_predictor()
     old_conf = predictor.conf_thresh
@@ -71,6 +80,15 @@ def predict_video_files(
             output_video_path=None,
             frame_stride=frame_stride,
             max_frames=max_frames,
+            use_tracking=use_tracking,
+            track_high_thresh=track_high_thresh,
+            track_low_thresh=track_low_thresh,
+            track_match_thresh=track_match_thresh,
+            track_buffer=track_buffer,
+            track_smooth_alpha=track_smooth_alpha,
+            track_min_area_ratio=track_min_area_ratio,
+            track_max_area_ratio=track_max_area_ratio,
+            track_min_hits=track_min_hits,
         )
         result["video"]["rgb_path"] = None
         result["video"]["thermal_path"] = None

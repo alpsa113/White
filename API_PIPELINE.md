@@ -10,6 +10,7 @@
 - `/predict/video` 영상 추론 API 작성 완료
 - RGB-only, thermal-only, RGB+thermal pair 입력 지원
 - `conf`, `nms`, `frame_stride`, `max_frames` query parameter 지원
+- 영상 API에서 `track`과 tracking 세부 query parameter 지원
 - 기본 입력 검증과 주요 예외 처리 추가
 
 아직 DB 저장, Streamlit 대시보드 연동은 구현하지 않았다.
@@ -125,6 +126,15 @@ conf: confidence threshold, 기본 0.25
 nms: NMS IoU threshold, 기본 0.6
 frame_stride: 몇 프레임마다 추론할지, 기본 5
 max_frames: 최대 추론 프레임 수, optional
+track: 영상 프레임 간 bbox tracking 적용 여부, 기본 false
+track_high_thresh: 새 track 생성용 confidence threshold, 기본 0.25
+track_low_thresh: 기존 track 보정용 confidence threshold, 기본 0.10
+track_match_thresh: track과 detection을 연결할 IoU threshold, 기본 0.35
+track_buffer: 짧은 미탐 시 track을 유지할 프레임 수, 기본 8
+track_smooth_alpha: bbox smoothing 강도, 기본 0.7
+track_min_area_ratio: bbox 면적 급변 방어 하한, 기본 0.4
+track_max_area_ratio: bbox 면적 급변 방어 상한, 기본 2.5
+track_min_hits: 결과에 표시하기 전 필요한 최소 연속 관측 수, 기본 1
 ```
 
 입력 규칙:
@@ -138,6 +148,8 @@ thermal_video만 업로드  -> thermal-only 영상 추론
 
 영상 API는 업로드 파일을 `tempfile.TemporaryDirectory()` 아래에 임시 저장한 뒤 `inference.video.predict_video()`를 호출한다. 현재 단계에서는 결과 영상을 영구 저장하지 않고, 프레임별 추론 결과 JSON만 반환한다.
 
+`track=true`로 요청하면 CLI 영상 추론과 동일한 간단한 ByteTrack 스타일 tracking을 적용한다. 이 옵션은 bbox 깜빡임과 짧은 미탐을 줄이는 데 사용한다. 장면 전환 직후 생기는 일시적 오탐은 아직 별도 scene-change 안정화 로직을 붙이지 않았으므로, 필요하면 `track_high_thresh`, `track_min_hits`, `track_buffer`를 보수적으로 조정한다.
+
 테스트 예시:
 
 ```text
@@ -146,6 +158,12 @@ conf: 0.25
 nms: 0.6
 frame_stride: 5
 max_frames: 2
+track: true
+track_high_thresh: 0.35
+track_low_thresh: 0.18
+track_match_thresh: 0.30
+track_buffer: 6
+track_min_hits: 4
 ```
 
 응답 예시:
@@ -161,17 +179,26 @@ max_frames: 2
     "height": 360,
     "total_frames": 30,
     "frame_stride": 5,
-    "processed_frames": 2
+    "processed_frames": 2,
+    "tracking": true
   },
   "frames": [
     {
       "frame_index": 0,
       "timestamp_ms": 0.0,
-      "detections": [],
       "latency_ms": 353.98,
       "input_modality": "rgb",
       "image_width": 640,
-      "image_height": 360
+      "image_height": 360,
+      "detections": [
+        {
+          "class_id": 0,
+          "class_name": "person",
+          "score": 0.82,
+          "bbox": [120.5, 80.0, 240.5, 300.0],
+          "track_id": 1
+        }
+      ]
     }
   ]
 }
@@ -243,5 +270,6 @@ max_frames: 2
 - `conf`, `nms`는 요청마다 predictor 속성을 임시로 바꾸는 방식이다.
 - 동시 요청이 많아지는 운영 환경에서는 `DualYOLOPredictor.predict()`가 요청별 `conf`, `nms`를 직접 받도록 개선하는 것이 좋다.
 - 영상 API는 현재 JSON 응답만 반환하며, 결과 영상 파일 저장은 아직 연결하지 않았다.
+- 영상 tracking은 현재 프레임 간 IoU 기반 최소 구현이며, 장면 전환 감지와 API 결과 영상 저장은 이후 단계에서 추가한다.
 - DB 저장, FastAPI-Streamlit 연동, AWS RDS MySQL 기록 구조는 이후 단계에서 추가한다.
 - 초기 서비스 단계에서는 로컬 저장소를 사용할 수 있지만, 다중 사용자/배포 환경에서는 S3 같은 object storage 연결을 검토한다.
