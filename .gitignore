@@ -30,3 +30,8 @@ mlruns/
 # OS
 .DS_Store
 .Rhistory
+
+# 환경변수, API
+.env
+.streamlit/secrets.toml
+.streamlit/config.toml
