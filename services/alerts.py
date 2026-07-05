@@ -3,7 +3,8 @@ services/alerts.py — 탐지 이벤트(알람) 등록/갱신 및 DB 동기화
 
 새로운 객체 탐지 시 로그 레코드 생성(create_detection_alert), 영상 추적 중
 기존 레코드의 신뢰도/프레임 수만 조용히 갱신(update_detection_alert),
-비고란 저장 콜백(update_remark), 단일 로그 DB 동기화(persist_log)를 담당합니다.
+경보 패널 비고란 저장 콜백(update_remark), 단일 로그 DB 동기화(persist_log)를
+담당합니다. RDS/S3 연동 실패는 예외로 앱을 죽이지 않고 경고 배너로만 알립니다.
 """
 import io
 import time
@@ -18,12 +19,14 @@ from config import FALLBACK_CONF_THRESH, FALLBACK_NMS_THRESH, AUTO_POPUP_COOLDOW
 
 
 def persist_log(alert: dict) -> None:
-    """단일 로그 객체의 변경 사항(상태, 비고란 등)을 데이터베이스에 즉시 동기화합니다."""
+    """단일 로그 객체의 변경 사항(상태, 비고란 등)을 데이터베이스에 즉시 동기화합니다.
+    DB_ENABLED가 False(메모리 모드)면 아무 작업도 하지 않습니다."""
     if not st.session_state.get("DB_ENABLED"):
         return
     try:
         db.update_log(alert["id"], alert)
     except Exception as e:
+        # 실패해도 화면 흐름은 끊지 않고, 상단 경고 배너로만 알림
         st.session_state["db_write_warning"] = f"RDS 갱신 실패: {e}"
 
 
@@ -33,26 +36,28 @@ def create_detection_alert(cam_name: str, class_name: str, conf: float, frames: 
                            timestamp_ms: float = 0.0, latency_ms: float = 0.0,
                            conf_thresh: float = FALLBACK_CONF_THRESH,
                            nms_thresh: float = FALLBACK_NMS_THRESH) -> int:
-    """
-    화면에 새로운 객체가 등장했을 때 호출되며, 새로운 탐지 로그 레코드를 생성하고 DB에 기록합니다.
-    사람인 경우 대시보드 패널에 띄우고 조건부로 팝업을 발생시킵니다.
+    """화면에 새로운 객체가 등장했을 때 호출되며, 새로운 탐지 로그 레코드를 생성하고 DB에 기록합니다.
+    사람(show_on_dash=True)인 경우 경보 패널에 띄우고, 쿨다운이 지났으면 팝업도 함께 트리거합니다.
+    동물(show_on_dash=False)인 경우 로그에는 남기되 경보 패널에는 표시하지 않습니다.
+
+    Returns:
+        int: 이 탐지 이벤트에 부여된 로그 ID (DB 성공 시 PK, 실패 시 로컬 카운터)
     """
     ss = st.session_state
     now = datetime.now()
     initial_status = "대기" if show_on_dash else "동물탐지"
 
-    # 스냅샷을 S3에 업로드하고 객체 키를 image_path에 저장.
-    # S3 미설정/실패 시 빈 문자열로 두어 기존 동작(메모리 스냅샷)을 유지한다.
+    # 스냅샷을 S3에 업로드하고 객체 키를 image_path에 저장 (S3 미설정/실패 시 빈 문자열로 남겨 메모리 스냅샷만 사용)
     image_key = ""
     if ss.get("S3_ENABLED") and snapshot is not None:
         image_key = s3.upload_snapshot(snapshot, cam_name) or ""
 
-    content_type = "image/jpeg"   # 스냅샷은 항상 JPEG
+    content_type = "image/jpeg"   # 스냅샷은 항상 JPEG로 저장
     file_size = 0
     if snapshot is not None:
         _buf = io.BytesIO()
         snapshot.save(_buf, format="JPEG")
-        file_size = _buf.tell()   # 직렬화된 byte 수
+        file_size = _buf.tell()   # 직렬화된 바이트 수 (DB storage_objects.file_size에 기록)
 
     _box = box or {"x1": 0.0, "y1": 0.0, "x2": 0.0, "y2": 0.0}
     record = {
@@ -70,8 +75,8 @@ def create_detection_alert(cam_name: str, class_name: str, conf: float, frames: 
         "content_type": content_type,
         "file_size":    file_size,
         "show_on_dashboard": show_on_dash,
-        "box": _box,               # DB insert_log용 (nested)
-        "x1": _box["x1"],          # 화면 표시용 flat key (DB 로드 구조와 통일)
+        "box": _box,               # db_rds.insert_log()가 그대로 사용
+        "x1": _box["x1"],          # 화면 표시용 flat key (DB에서 불러온 로그와 필드 구조 통일)
         "y1": _box["y1"],
         "x2": _box["x2"],
         "y2": _box["y2"],
@@ -83,7 +88,7 @@ def create_detection_alert(cam_name: str, class_name: str, conf: float, frames: 
         "nms_thresh":  nms_thresh,
     }
 
-    # DB에 저장하여 고유 식별자(PK)를 획득. 실패 시 로컬 카운터 활용.
+    # DB에 저장하여 고유 식별자(PK)를 획득 — 실패 시 로컬 카운터로 대체하여 메모리 모드로 계속 동작
     aid = None
     if ss.get("DB_ENABLED"):
         try:
@@ -95,13 +100,13 @@ def create_detection_alert(cam_name: str, class_name: str, conf: float, frames: 
         ss.next_alert_id += 1
 
     record["id"] = aid
-    record["snapshot"] = snapshot  # 무거운 스냅샷 객체는 메모리에만 보존합니다.
+    record["snapshot"] = snapshot  # 무거운 스냅샷 객체는 DB가 아니라 메모리(session_state)에만 보존
     ss.detection_logs.append(record)
-    # 경보 패널은 이번 세션 탐지만 표시 — RDS 과거 이력과 분리
+    # 경보 패널은 이번 세션에서 탐지된 사람만 표시 — RDS 과거 이력과는 별개로 관리
     if record.get("show_on_dashboard"):
         ss.dashboard_alerts.append(record)
 
-    # 쿨다운 시간을 체크하여 빈번한 팝업 호출을 방지합니다.
+    # 사람 탐지 자동 팝업 — 쿨다운(AUTO_POPUP_COOLDOWN) 안에 있으면 팝업을 억제하여 도배 방지
     if show_on_dash and ss.get("auto_popup", True):
         current_time = time.time()
         last_popup = ss.get("last_auto_popup_time", 0)
@@ -114,26 +119,26 @@ def create_detection_alert(cam_name: str, class_name: str, conf: float, frames: 
 
 
 def update_detection_alert(aid: int, conf: float, frames: int, snapshot: Image.Image | None):
-    """
-    영상에서 지속적으로 추적 중인 객체의 '최대 신뢰도'와 '누적 추적 프레임' 값만 조용히 갱신합니다.
-    신규 알람을 추가 생성하지 않음으로써 시스템 로그 도배를 막습니다.
-    """
+    """영상에서 지속적으로 추적 중인 동일 객체의 '최대 신뢰도'와 '누적 추적 프레임' 값만
+    조용히 갱신합니다. 신규 알람을 추가 생성하지 않아 같은 사람이 계속 화면에 있어도
+    로그가 도배되지 않습니다."""
     ss = st.session_state
     for a in ss.detection_logs:
         if a["id"] == aid:
             a["confidence"] = max(a["confidence"], conf)
             a["hit_frames"] = frames
             a["show_on_dashboard"] = True
-            # 경보 패널 컨테이너에도 동일 객체가 없으면 추가
+            # 경보 패널에 아직 없으면 추가 (예: 동물로 시작했다가 사람으로 재분류되는 경우 대비)
             if not any(d["id"] == aid for d in ss.dashboard_alerts):
                 ss.dashboard_alerts.append(a)
             if snapshot is not None:
-                a["snapshot"] = snapshot
+                a["snapshot"] = snapshot  # 더 선명한/최신 프레임으로 스냅샷 교체
             break
 
 
 def update_remark(aid: int):
-    """우측 패널의 비고 입력값이 변경되었을 때 트리거되는 콜백 함수로 변경 데이터를 DB에 동기화합니다."""
+    """경보 패널의 비고 입력창(text_input)에서 on_change 콜백으로 호출되어,
+    입력된 값을 메모리 로그에 반영하고 즉시 DB에도 동기화합니다."""
     ss = st.session_state
     val = ss[f"remark_input_{aid}"]
     for a in ss.detection_logs:

@@ -1,11 +1,11 @@
 """
 views/logs.py — 페이지2: 탐지 데이터 로그 관리
 
-dashboard.py와 마찬가지로 render() 함수로만 노출되며, app.py에서
-import하여 호출하는 방식으로만 사용합니다. (폴더명을 "views"로 지은
-이유는 views/dashboard.py 상단 설명 참고)
+dashboard.py와 마찬가지로 render() 함수로만 노출되며, app.py에서 import하여
+호출하는 방식으로만 사용합니다. (폴더명을 "views"로 지은 이유는 views/dashboard.py
+상단 설명 참고)
 
-로그 목록을 최신순 정렬한 뒤 조회 탭과 편집 탭을 조립합니다.
+로그 목록을 최신순으로 정렬한 뒤, 조회 탭과 편집 탭 두 개를 조립합니다.
 """
 import streamlit as st
 
@@ -21,7 +21,8 @@ def render() -> None:
         st.info("현재 기록된 탐지 데이터가 없습니다.")
         return
 
-    # 최신 탐지일시(created_at) 기준으로 정렬
+    # 최신 탐지일시(created_at) 기준으로 정렬 — DB 레코드와 메모리 레코드의 필드 차이는
+    # a.get("created_at")가 없을 때 date+time 조합으로 대체하여 흡수합니다.
     sorted_logs = sorted(
         ss.detection_logs,
         key=lambda a: (
@@ -31,7 +32,7 @@ def render() -> None:
         reverse=True,
     )
 
-    # 데이터의 무결성을 위해 직접 텍스트 수정 기능은 제한하며, 조회 및 삭제 탭으로 분리하여 관리합니다.
+    # 조회(읽기 전용)와 편집(수정/삭제)을 탭으로 분리하여, 실수로 값을 바꾸는 것을 방지
     tab_view, tab_manage = st.tabs(["🔍 로그 조회 및 이미지", "✏️ 로그 편집 및 삭제"])
 
     with tab_view:

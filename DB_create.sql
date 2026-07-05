@@ -10,7 +10,7 @@
 --
 -- 공통 규칙:
 --   - PK : BIGINT UNSIGNED AUTO_INCREMENT
---   - 시각 : DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6)
+--   - 시각 : DATETIME(2) NOT NULL DEFAULT CURRENT_TIMESTAMP(2)
 --   - 상태/타입값 : VARCHAR (ENUM 미사용, 애플리케이션에서 검증)
 --   - FK 삭제 정책:
 --       inference_jobs.model_version_id → ON DELETE RESTRICT
@@ -33,9 +33,9 @@ CREATE TABLE IF NOT EXISTS model_versions (
     phase           TINYINT UNSIGNED          DEFAULT NULL  COMMENT '학습 phase (1/2/3). 외부 실험 모델은 NULL 가능',
     checkpoint_path VARCHAR(1024)    NOT NULL               COMMENT 'checkpoint 경로 (로컬 또는 S3 URI)',
     config_path     VARCHAR(1024)             DEFAULT NULL  COMMENT '모델 설정 파일 경로. 없으면 NULL',
-    class_map       JSON             NOT NULL               COMMENT '추론 당시 클래스 ID-이름 매핑 (예: {"0":"사람","1":"멧돼지"})',
+    class_map       JSON             NOT NULL               COMMENT '추론 당시 클래스 ID-이름 매핑 (예: {"0":"person","1":"boar","2":"deer","3":"small_animal"})',
     notes           TEXT                      DEFAULT NULL  COMMENT '비고',
-    created_at      DATETIME(6)      NOT NULL DEFAULT CURRENT_TIMESTAMP(6) COMMENT '생성 시각',
+    created_at      DATETIME(2)      NOT NULL DEFAULT CURRENT_TIMESTAMP(2) COMMENT '생성 시각',
     PRIMARY KEY (id),
     INDEX idx_model_versions_phase      (phase),
     INDEX idx_model_versions_created_at (created_at)
@@ -66,9 +66,9 @@ CREATE TABLE IF NOT EXISTS inference_jobs (
     frame_stride     INT UNSIGNED              DEFAULT NULL  COMMENT '영상 추론 frame stride. 이미지 추론은 NULL',
     max_frames       INT UNSIGNED              DEFAULT NULL  COMMENT '영상 추론 최대 처리 프레임 수. 제한 없으면 NULL',
     error_message    TEXT                      DEFAULT NULL  COMMENT '실패 사유. status=failed 일 때 기록',
-    created_at       DATETIME(6)      NOT NULL DEFAULT CURRENT_TIMESTAMP(6) COMMENT '작업 생성 시각',
-    started_at       DATETIME(6)               DEFAULT NULL  COMMENT '추론 시작 시각',
-    completed_at     DATETIME(6)               DEFAULT NULL  COMMENT '추론 완료 시각',
+    created_at       DATETIME(2)      NOT NULL DEFAULT CURRENT_TIMESTAMP(2) COMMENT '작업 생성 시각',
+    started_at       DATETIME(2)               DEFAULT NULL  COMMENT '추론 시작 시각',
+    completed_at     DATETIME(2)               DEFAULT NULL  COMMENT '추론 완료 시각',
     PRIMARY KEY (id),
     CONSTRAINT fk_jobs_model_version
         FOREIGN KEY (model_version_id)
@@ -102,7 +102,7 @@ CREATE TABLE IF NOT EXISTS storage_objects (
     uri          VARCHAR(1024)    NOT NULL               COMMENT '파일 위치. 로컬 경로 또는 S3 URI',
     content_type VARCHAR(100)              DEFAULT NULL  COMMENT 'MIME type. 예: image/jpeg, video/mp4',
     file_size    BIGINT UNSIGNED           DEFAULT NULL  COMMENT '파일 크기 (byte)',
-    created_at   DATETIME(6)      NOT NULL DEFAULT CURRENT_TIMESTAMP(6) COMMENT '생성 시각',
+    created_at   DATETIME(2)      NOT NULL DEFAULT CURRENT_TIMESTAMP(2) COMMENT '생성 시각',
     PRIMARY KEY (id),
     CONSTRAINT fk_storage_objects_job
         FOREIGN KEY (job_id)
@@ -129,7 +129,7 @@ CREATE TABLE IF NOT EXISTS inference_frames (
     image_width  INT UNSIGNED     NOT NULL               COMMENT '원본 입력 이미지/프레임 너비 (픽셀)',
     image_height INT UNSIGNED     NOT NULL               COMMENT '원본 입력 이미지/프레임 높이 (픽셀)',
     latency_ms   DECIMAL(10,3)             DEFAULT NULL  COMMENT '해당 프레임 추론 소요 시간 (ms). 성능 모니터링용',
-    created_at   DATETIME(6)      NOT NULL DEFAULT CURRENT_TIMESTAMP(6) COMMENT '생성 시각',
+    created_at   DATETIME(2)      NOT NULL DEFAULT CURRENT_TIMESTAMP(2) COMMENT '생성 시각',
     PRIMARY KEY (id),
     CONSTRAINT fk_inference_frames_job
         FOREIGN KEY (job_id)
@@ -148,20 +148,22 @@ CREATE TABLE IF NOT EXISTS inference_frames (
 -- bbox 좌표는 정규화 좌표가 아닌 원본 픽셀 좌표로 저장한다.
 -- job_id는 frame_id로 역추적 가능하지만
 -- 특정 job의 전체 bbox 빠른 조회를 위해 중복 저장한다.
--- class_id 매핑: 0=person(사람), 1=boar(멧돼지), 2=deer(고라니), 99=정의되지 않은 클래스
+-- class_id 매핑 (db_rds.py의 CLASS_ID_MAP과 반드시 동일하게 유지):
+--   0=person(사람), 1=boar(멧돼지), 2=deer(고라니), 3=small_animal(소형동물),
+--   99=정의되지 않은 클래스(UNKNOWN_CLASS_ID)
 -- ---------------------------------------------------------
 CREATE TABLE IF NOT EXISTS detections (
     id         BIGINT UNSIGNED  NOT NULL AUTO_INCREMENT COMMENT '탐지 결과 ID',
     job_id     BIGINT UNSIGNED  NOT NULL               COMMENT '추론 작업 ID (FK → inference_jobs, 빠른 조회용 중복 저장)',
     frame_id   BIGINT UNSIGNED  NOT NULL               COMMENT '프레임 ID (FK → inference_frames)',
-    class_id   INT UNSIGNED     NOT NULL               COMMENT '모델 출력 클래스 번호',
+    class_id   INT UNSIGNED     NOT NULL               COMMENT '모델 출력 클래스 번호 (0=person, 1=boar, 2=deer, 3=small_animal, 99=미정의)',
     class_name VARCHAR(50)      NOT NULL               COMMENT '추론 당시 클래스 이름. 매핑 변경에 대비해 저장',
     score      DECIMAL(6,5)     NOT NULL               COMMENT 'confidence score. conf_thresh 통과한 결과만 저장',
     x1         DECIMAL(10,3)    NOT NULL               COMMENT 'bbox 좌상단 x 픽셀 좌표 (원본 이미지 기준)',
     y1         DECIMAL(10,3)    NOT NULL               COMMENT 'bbox 좌상단 y 픽셀 좌표 (원본 이미지 기준)',
     x2         DECIMAL(10,3)    NOT NULL               COMMENT 'bbox 우하단 x 픽셀 좌표 (원본 이미지 기준)',
     y2         DECIMAL(10,3)    NOT NULL               COMMENT 'bbox 우하단 y 픽셀 좌표 (원본 이미지 기준)',
-    created_at DATETIME(6)      NOT NULL DEFAULT CURRENT_TIMESTAMP(6) COMMENT '생성 시각',
+    created_at DATETIME(2)      NOT NULL DEFAULT CURRENT_TIMESTAMP(2) COMMENT '생성 시각',
     PRIMARY KEY (id),
     CONSTRAINT fk_detections_job
         FOREIGN KEY (job_id)
@@ -185,6 +187,7 @@ CREATE TABLE IF NOT EXISTS detections (
 -- 대시보드 최초 실행 시 inference_jobs.model_version_id
 -- NOT NULL 제약을 만족시키기 위한 기본 모델 레코드
 -- class_map은 실제 모델(backend.py)의 출력 라벨인 영문 기준으로 기록한다.
+-- db_rds.py의 CLASS_ID_MAP과 항상 동일한 클래스 집합을 유지해야 한다.
 -- ---------------------------------------------------------
 INSERT IGNORE INTO model_versions
     (name, checkpoint_path, class_map, notes)
@@ -192,6 +195,6 @@ VALUES
     (
         'GOP YOLO (Default)',
         'weights/best.pt',
-        '{"0":"person", "1":"boar", "2":"deer"}',
+        '{"0":"person", "1":"boar", "2":"deer", "3":"small_animal"}',
         '자동 생성된 기본 모델'
     );

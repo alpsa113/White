@@ -1,9 +1,10 @@
 """
 ui/log_tabs.py — 탐지 데이터 로그 페이지의 두 탭(조회 / 편집) 렌더링
 
-탭1(render_view_tab)은 표+이미지 뷰어, 탭2(render_manage_tab)는 data_editor
-기반 편집/삭제 UI를 담당합니다. 실제 저장 로직은 services/log_management.py에
-위임합니다.
+탭1(render_view_tab)은 표 + 선택한 행의 탐지 이미지를 보여주는 조회 전용 화면이고,
+탭2(render_manage_tab)는 st.data_editor 기반으로 실제 수정/삭제가 가능한 편집 화면입니다.
+저장 로직 자체는 services/log_management.py에 위임하고, 이 파일은 화면 구성과
+사용자 입력 수집만 담당합니다.
 """
 import pandas as pd
 import streamlit as st
@@ -14,7 +15,8 @@ from utils.formatters import fmt_dt, fmt_src, fmt_bbox
 
 
 def _build_view_df(sorted_logs: list[dict]) -> pd.DataFrame:
-    """조회 탭용 DataFrame 컬럼 매핑."""
+    """조회 탭에 표시할 DataFrame을 구성합니다. 정렬은 호출 측(views/logs.py)에서
+    이미 끝난 상태로 넘어오므로, 여기서는 컬럼 매핑/포맷팅만 수행합니다."""
     df_data = []
     for a in sorted_logs:
         df_data.append({
@@ -25,20 +27,20 @@ def _build_view_df(sorted_logs: list[dict]) -> pd.DataFrame:
             "클래스명":       a.get("class_name", ""),
             "신뢰도 (Score)": f"{float(a.get('score', a.get('confidence', 0))):.1%}",
             "BBox 좌표":      fmt_bbox(a),
-            "이미지 URI":     a.get("uri", a.get("image_path", "")),
+            "이미지 URI":     a.get("uri", a.get("image_path", "")),  # 표에는 안 보이고 이미지 로딩용으로만 사용
         })
     return pd.DataFrame(df_data)
 
 
 def render_view_tab(sorted_logs: list[dict]) -> None:
-    """탭1 — 로그 조회 + 이미지 뷰어."""
+    """탭1 — 로그 조회 표 + 선택한 행의 탐지 이미지 뷰어를 좌우로 배치합니다."""
     ss = st.session_state
     df = _build_view_df(sorted_logs)
 
     view_col, img_col = st.columns([6, 4])
 
     with view_col:
-        # 뷰어에서는 경로가 긴 URI를 표에서 숨김 처리하여 가독성을 확보합니다.
+        # 경로가 긴 이미지 URI는 표에서 숨겨 가독성을 확보 (이미지 열람 자체는 img_col에서 처리)
         selection = st.dataframe(
             df.drop(columns=["이미지 URI"]),
             use_container_width=True,
@@ -50,7 +52,8 @@ def render_view_tab(sorted_logs: list[dict]) -> None:
 
         selected_rows = selection.selection.get("rows", [])
         if selected_rows:
-            # 선택된 행의 탐지 ID를 저장 (인덱스 대신 ID 기반으로 추적하여 rerun 후 범위 초과 방지)
+            # 인덱스가 아니라 탐지 ID를 저장해두는 이유: rerun 후 데이터가 재정렬되어도
+            # ID 기준으로 다시 찾을 수 있어 "범위 초과" 오류를 피할 수 있습니다.
             _sel_idx = selected_rows[0]
             if 0 <= _sel_idx < len(df):
                 ss["selected_log_id"] = df.iloc[_sel_idx]["탐지 ID"]
@@ -64,14 +67,14 @@ def render_view_tab(sorted_logs: list[dict]) -> None:
             st.info("왼쪽 표에서 행을 클릭하면 해당 객체의 탐지 이미지가 표시됩니다.")
             return
 
-        # ID로 직접 로그를 찾으므로 DataFrame 인덱스 범위 초과 오류가 발생하지 않습니다.
+        # ID로 직접 로그를 찾으므로, 리스트 순서가 바뀌어도 항상 올바른 레코드를 가리킴
         sel_log = next((a for a in ss.detection_logs if a.get("id") == sel_log_id), None)
         _df_match = df[df["탐지 ID"] == sel_log_id]
         sel_row = _df_match.iloc[0] if not _df_match.empty else None
 
         if sel_log is None or sel_row is None:
             st.warning("선택된 로그를 찾을 수 없습니다.")
-            ss["selected_log_id"] = None  # 무효 선택 초기화
+            ss["selected_log_id"] = None  # 삭제 등으로 무효해진 선택은 초기화
             return
 
         snap = sel_log.get("snapshot")
@@ -86,7 +89,7 @@ def render_view_tab(sorted_logs: list[dict]) -> None:
         st.caption(f"🕒 {fmt_dt(sel_log)} &nbsp;·&nbsp; BBox: {sel_row['BBox 좌표']}")
         st.divider()
 
-        # 이미지 렌더링 순위: 메모리 스냅샷(세션 중) -> S3 다운로드
+        # 이미지 로딩 우선순위: 메모리 스냅샷(이번 세션 탐지) → S3 다운로드(과거 이력)
         if snap is not None:
             st.image(snap, use_container_width=True, caption="탐지 순간 캡처")
         elif ss.get("S3_ENABLED") and image_uri:
@@ -101,7 +104,8 @@ def render_view_tab(sorted_logs: list[dict]) -> None:
 
 
 def render_manage_tab(sorted_logs: list[dict]) -> None:
-    """탭2 — 로그 편집 및 삭제 관리."""
+    """탭2 — st.data_editor로 로그를 직접 수정하거나 행을 삭제할 수 있는 관리 화면입니다.
+    실제 저장(DB/S3/메모리 반영)은 이 함수가 아니라 save_log_edits()가 담당합니다."""
     ss = st.session_state
 
     st.caption(
@@ -120,19 +124,19 @@ def render_manage_tab(sorted_logs: list[dict]) -> None:
             "입력 소스":  fmt_src(a),
             "클래스명":   a.get("class_name", ""),
             "신뢰도 (%)": round(float(a.get("score", a.get("confidence", 0))) * 100, 1),
-            "BBox 좌표":  fmt_bbox(a),                                     # 수정 불가
+            "BBox 좌표":  fmt_bbox(a),                                     # 수정 불가 (모델이 산출한 값이므로)
             "이미지 경로": a.get("uri", a.get("image_path", "")),
             "상태":       a.get("status", "대기"),
             "비고":       a.get("remarks", ""),
         })
     df_edit_orig = pd.DataFrame(df_edit_data)
 
-    # 클래스명 풀: DB에 존재하는 고유값 + 기본값 병합
+    # 클래스명 드롭다운 선택지: 기본 클래스 + 현재 로그에 실제로 존재하는 클래스를 합쳐서 구성
     known_classes = sorted(
-        {"사람", "멧돼지", "고라니"} | set(df_edit_orig["클래스명"].dropna().unique())
+        {"사람", "멧돼지", "고라니", "소형동물"} | set(df_edit_orig["클래스명"].dropna().unique())
     )
 
-    # num_rows="dynamic" → 기본 행 선택 체크박스 + 우상단 휴지통 UI 활성화
+    # num_rows="dynamic" 옵션이 행 선택 체크박스와 우상단 휴지통(삭제) UI를 함께 활성화합니다.
     edited_df = st.data_editor(
         df_edit_orig,
         use_container_width=True,
@@ -184,6 +188,7 @@ def render_manage_tab(sorted_logs: list[dict]) -> None:
     if not save_clicked:
         return
 
+    # 실제 비교/저장 로직은 전부 services 계층에 위임 — 이 함수는 결과만 받아 표시
     result = save_log_edits(df_edit_orig, edited_df)
     updated_count = result["updated_count"]
     removed_ids = result["removed_ids"]

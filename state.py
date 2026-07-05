@@ -1,9 +1,10 @@
 """
 state.py — Streamlit session_state 초기화 전담
 
-앱 실행(재실행 포함) 시마다 호출되며, 필요한 모든 session_state 키의 기본값을
-설정합니다. setdefault를 사용하므로 이미 값이 있는 키는 덮어쓰지 않습니다.
-이후 다른 모듈에서는 st.session_state를 통해 자유롭게 읽고 씁니다.
+앱이 실행되거나 재실행될 때마다(페이지 이동, 버튼 클릭 등 모든 상호작용마다)
+가장 먼저 호출되어, 필요한 모든 session_state 키의 기본값을 채워 넣습니다.
+setdefault()를 사용하므로 이미 값이 존재하는 키는 절대 덮어쓰지 않습니다.
+이후 다른 모듈들은 st.session_state를 통해 이 값들을 자유롭게 읽고 씁니다.
 """
 import streamlit as st
 
@@ -15,21 +16,23 @@ def init_session_state() -> None:
     """앱 진입 시 필요한 모든 session_state 키를 기본값으로 초기화합니다."""
     ss = st.session_state
 
-    # 주요 데이터 컨테이너
-    ss.setdefault("detection_logs", [])   # 전체 탐지 이력 (로그 페이지용 · RDS 이력 포함)
-    ss.setdefault("dashboard_alerts", []) # 이번 세션 경보 패널 전용 (재시작 시 초기화 · RDS 미로드)
-    ss.setdefault("next_alert_id", 1)     # 메모리 모드 작동 시 새로운 로그에 부여할 로컬 ID 카운터
-    ss.setdefault("popup_id", None)       # 화면 중앙에 크게 띄울 특정 로그의 ID를 지정하는 트리거 변수
+    # ── 주요 데이터 컨테이너 ──
+    ss.setdefault("detection_logs", [])   # 전체 탐지 이력 (로그 페이지에서 사용 · RDS 연결 시 과거 이력까지 포함)
+    ss.setdefault("dashboard_alerts", []) # 이번 세션에서 발생한 사람 탐지만 담는 경보 패널 전용 리스트 (재시작 시 초기화, RDS와 무관)
+    ss.setdefault("next_alert_id", 1)     # 메모리 모드(DB 미연결)일 때 새 로그에 부여할 로컬 ID 카운터
+    ss.setdefault("popup_id", None)       # 화면 중앙에 크게 띄울 특정 로그의 ID — 값이 있으면 다음 렌더에서 팝업이 뜨고 소비됨
 
-    # 데모 및 시뮬레이션 설정                                                # ← 데모 모드 전용 (제거 시 이 두 줄도 삭제)
-    ss.setdefault("simulate", True)       # 백엔드 연동 없이 가짜 데이터를 생성할지 여부
-    ss.setdefault("person_ratio", 0.5)    # 시뮬레이션 시 탐지 객체가 '사람'으로 나올 확률
+    # ── 데모 및 시뮬레이션 설정 ──
+    ss.setdefault("simulate", True)       # True면 backend.py 호출 없이 무작위 탐지 데이터를 생성
+    ss.setdefault("person_ratio", 0.5)    # 데모 모드에서 탐지 객체가 '사람'으로 나올 확률 (0.0~1.0)
 
-    # UI 및 알람 제어 상태
-    ss.setdefault("auto_popup", True)     # 사람 발견 시 팝업창을 자동으로 띄울지 여부
-    ss.setdefault("current_page", "관제 대시보드")
-    ss.setdefault("last_auto_popup_time", 0)
-    ss.setdefault("selected_cam", "전체 구역")  # "전체 구역" → 2×2 그리드 / 카메라명 → 집중 보기
+    # ── UI 및 알람 제어 상태 ──
+    ss.setdefault("auto_popup", True)          # 사람 탐지 시 팝업창을 자동으로 띄울지 여부
+    ss.setdefault("show_clock", True)          # 상단 실시간 시계 표시 여부 (설정 페이지에서 조절)
+    ss.setdefault("current_page", "관제 대시보드")  # 현재 선택된 페이지 (상단 네비게이션 버튼으로 전환)
+    ss.setdefault("last_auto_popup_time", 0)   # 마지막 자동 팝업 발생 시각 — 쿨다운 계산용
+    ss.setdefault("selected_cam", "전체 구역")  # "전체 구역" → 그리드 보기 / 특정 카메라명 → 집중 보기
+    ss.setdefault("grid_count", 4)              # '전체 구역' 그리드에 표시할 총 카메라 개수 (대시보드에서 +/- 조절)
 
     _sync_db_and_s3()
 
@@ -38,15 +41,15 @@ def _sync_db_and_s3() -> None:
     """DB/S3 연결 가능 여부를 확인하고, 최초 1회만 과거 로그를 메모리로 적재합니다."""
     ss = st.session_state
 
-    # 앱 시작 시 DB 연결 가능 여부를 확인하고, 과거 로그 데이터를 메모리로 적재합니다.
+    # 앱이 리런될 때마다 연결 가능 여부를 다시 확인하여 상단 상태뱃지가 항상 최신 상태를 반영하도록 함
     ss["DB_ENABLED"] = db.init_db()
-    ss["S3_ENABLED"] = s3.is_enabled()   # secrets.toml에 [s3] 설정이 있으면 True
-    ss.setdefault("db_loaded", False)
+    ss["S3_ENABLED"] = s3.is_enabled()   # secrets.toml에 [s3] 설정이 채워져 있으면 True
+    ss.setdefault("db_loaded", False)    # 과거 로그를 이미 한 번 불러왔는지 여부 (중복 로딩 방지)
 
     if ss["DB_ENABLED"] and not ss.db_loaded:
         try:
             ss.detection_logs = db.fetch_all_logs()
-            # 기존 DB에 저장된 가장 큰 ID를 기반으로 로컬 카운터를 동기화합니다.
+            # 기존 DB에 저장된 가장 큰 ID를 기준으로 로컬 카운터를 동기화 (메모리 모드로 전환되어도 ID가 겹치지 않도록)
             if ss.detection_logs:
                 ss.next_alert_id = max(a["id"] for a in ss.detection_logs) + 1
             ss.db_loaded = True

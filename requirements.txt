@@ -1,0 +1,28 @@
+# GOP 통합 감시 시스템 — 프로젝트 의존성 목록
+#
+# 설치 방법:
+#   pip install -r requirements.txt
+#
+# 주의: opencv-python은 로컬 개발/시연 환경(모니터 있는 PC) 기준입니다.
+# 헤드리스 서버(EC2 등 GUI 없는 환경)에 배포할 경우 opencv-python 대신
+# opencv-python-headless를 설치하세요 (기능은 동일, 불필요한 GUI 의존성만 제거됨).
+
+# ── 백엔드 (FastAPI 추론 서버) ──
+fastapi
+uvicorn
+ultralytics
+python-multipart
+
+# ── 프론트엔드 (Streamlit) ──
+streamlit
+pandas
+opencv-python
+
+# ── 공통 (백엔드·프론트엔드 양쪽에서 사용) ──
+pillow
+requests
+
+# ── AWS 연동 (RDS/S3) ──
+sqlalchemy
+pymysql
+boto3

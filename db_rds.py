@@ -18,13 +18,14 @@ from sqlalchemy import text, event
 # 클래스명 ↔ class_id 매핑 (insert_log, update_log 공용)
 # ------------------------------------------------------------------ #
 # 한글(데모 모드 시뮬레이션)과 영어(실제 모델 출력) 라벨을 모두 지원합니다.
-# 정의되지 않은 클래스가 들어오면 기존 클래스(0/1/2)와 절대 섞이지 않도록
+# 정의되지 않은 클래스가 들어오면 기존 클래스(0/1/2/3)와 절대 섞이지 않도록
 # 별도의 UNKNOWN_CLASS_ID로 격리합니다.
 UNKNOWN_CLASS_ID = 99
 CLASS_ID_MAP = {
     "사람": 0, "person": 0,
     "멧돼지": 1, "boar": 1,
     "고라니": 2, "deer": 2,
+    "소형동물": 3, "small_animal": 3,
 }
 
 
@@ -253,7 +254,7 @@ def insert_log(rec: dict) -> int:
         sql_model = text("""
             INSERT INTO model_versions (name, checkpoint_path, class_map, notes)
             VALUES ('GOP YOLO (Default)', 'weights/best.pt',
-                    '{"0":"person", "1":"boar", "2":"deer"}', '탐지 이벤트 자동 생성')
+                    '{"0":"person", "1":"boar", "2":"deer", "3":"small_animal"}', '탐지 이벤트 자동 생성')
         """)
         model_version_id = conn.execute(sql_model).lastrowid
 
