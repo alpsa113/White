@@ -223,14 +223,13 @@ phase3는 실제 GOP 환경 적응 단계로 남겨두는 것이 좋습니다.
 ```yaml
 aux_active: true
 uncertainty_active: false
-uncertainty_start_epoch: 10
+uncertainty_start_epoch: null
 fusion_reg_active: true
 modality_dropout_prob: 0.05
 ```
 
-`PhaseScheduler`는 `uncertainty_start_epoch`에 도달하면 uncertainty head를 활성화합니다.
-미니테스트처럼 uncertainty를 끄고 비교하려면 `uncertainty_active: false`,
-`uncertainty_start_epoch: null`로 설정합니다.
+1차 본학습 baseline에서는 phase2에서도 uncertainty head를 끄고 pair fusion 학습을 안정적으로 진행합니다.
+후속 실험에서 uncertainty head를 비교하려면 `uncertainty_start_epoch`를 별도 실험값으로 지정합니다.
 
 ### 실행
 
@@ -308,14 +307,15 @@ empty background를 `single/3`에 넣지 않습니다.
 
 ```yaml
 aux_active: false
-uncertainty_active: true
-uncertainty_start_epoch: 0
+uncertainty_active: false
+uncertainty_start_epoch: null
 fusion_reg_active: true
 backbone_unfreeze_epoch: 8
 hard_negative_sampling:
   enabled: true
 ```
 
+1차 본학습 baseline에서는 uncertainty head를 끄고 안정적인 탐지 성능을 먼저 확보합니다.
 전반부는 backbone을 동결하고, 후반부에 전체를 낮은 learning rate로 fine-tuning합니다.
 
 ### 실행
