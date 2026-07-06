@@ -25,7 +25,7 @@ def init_session_state() -> None:
 
     # ── 데모 및 시뮬레이션 설정 ──
     ss.setdefault("simulate", True)       # True면 backend.py 호출 없이 무작위 탐지 데이터를 생성
-    ss.setdefault("person_ratio", 0.5)    # 데모 모드에서 탐지 객체가 '사람'으로 나올 확률 (0.0~1.0)
+    ss.setdefault("person_ratio", 0.03)    # 데모 모드에서 탐지 객체가 '사람'으로 나올 확률 (0.0~1.0)
 
     # ── UI 및 알람 제어 상태 ──
     ss.setdefault("auto_popup", True)          # 사람 탐지 시 팝업창을 자동으로 띄울지 여부

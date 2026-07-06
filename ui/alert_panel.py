@@ -8,7 +8,7 @@ ui/alert_panel.py — 우측 사람 탐지 경보 패널 렌더링
 import streamlit as st
 
 from services.alerts import update_remark, persist_log
-
+from ui.dialogs import open_popup
 
 def render_alert_panel() -> None:
     """대시보드 우측의 사람 탐지 경보 패널을 렌더링합니다."""
@@ -59,5 +59,5 @@ def render_alert_panel() -> None:
             if alert["status"] != "대기":
                 st.caption(f"✓ 처리상태: **{alert['status']}**")
             if st.button("🔍 탐지 화면", key=f"view_{alert['id']}", use_container_width=True):
-                ss["popup_id"] = alert["id"]
+                open_popup(alert["id"])
                 st.rerun()

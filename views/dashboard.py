@@ -7,170 +7,49 @@ views/dashboard.py — 페이지1: 관제 대시보드
 render() 함수만 노출하는 모듈이므로, 그 자동 동작과 충돌하지 않도록 폴더명을
 "views"로 정했습니다. 반드시 app.py에서 import하여 호출하는 방식으로만 사용하세요.
 
-라이브 카메라 피드(그리드/집중 보기), 우측 경보 패널, 팝업, 실시간 재생 루프를
-조립합니다. 세부 렌더링은 ui/, services/ 모듈에 위임합니다.
+카메라 목록 준비는 services/camera_registry.py, 헤더 위젯은
+ui/camera/toolbar.py, 카드 배치는 ui/camera/grid.py, 팝업 처리는
+ui/dialogs.py에 위임하고, 이 파일은 배치 순서만 조립합니다 (render()가
+영상 재생 등으로 아주 자주 재실행되므로, 로직은 최대한 다른 모듈에 둡니다).
 """
-import math
-
 import streamlit as st
 
-from config import build_camera_list, MAX_CAMERAS
-from ui.camera_card import render_camera_grid, render_camera_focus, show_person_dialog, render_camera_reorder
+from services.playback import run_playback_loop
+from services.camera_registry import get_active_cameras, get_valid_area_options, compute_grid_columns
+from ui.camera.toolbar import render_dashboard_header, consume_pending_camera_switch
+from ui.camera.grid import render_camera_grid, render_camera_focus
 from ui.alert_panel import render_alert_panel
-from services.video_tracking import run_playback_loop, reset_cam_state
+from ui.dialogs import handle_pending_popup
 
-def _get_ordered_cameras(cameras: list[dict]) -> list[dict]:
-    """session_state.camera_order에 저장된 순서대로 cameras를 재배열합니다.
-    그리드 개수가 늘어나 순서 목록에 없는 새 카메라가 생기면 맨 뒤에 추가하고,
-    그리드가 줄어들어 목록에서 사라진 카메라 id는 순서에서도 함께 제거합니다."""
-    ss = st.session_state
-    by_id = {c["id"]: c for c in cameras}
-    order = [cid for cid in ss.get("camera_order", []) if cid in by_id]
-    for c in cameras:
-        if c["id"] not in order:
-            order.append(c["id"])
-    ss["camera_order"] = order
-    return [by_id[cid] for cid in order]
-
-
-def _sync_grid_count() -> None:
-    """number_input(+/- 스텝퍼)의 변경값을 실제 상태 키(grid_count)로 복사하는 콜백.
-
-    위젯 전용 key(_grid_count_widget)와 실제 상태 key(grid_count)를 분리해두는 이유:
-    이 위젯은 '전체 구역'일 때만 그려지는데, Streamlit은 특정 실행에서 그려지지 않는
-    위젯의 key를 session_state에서 삭제합니다. 위젯 key를 다른 곳에서 직접 참조하면
-    페이지를 옮겨 다닐 때 값이 사라지는 문제가 생기므로, 항상 안정적으로 유지되어야
-    하는 실제 값은 이렇게 별도 key로 분리해 관리합니다.
-    """
-    st.session_state["grid_count"] = st.session_state["_grid_count_widget"]
-
-
-def _render_grid_count_selector() -> None:
-    """'전체 구역' 모드에서만 노출되는 총 카메라 개수 선택 UI (+/- 스텝퍼).
-    특정 카메라 집중 보기 중에는 그리드 개념 자체가 없으므로 아무것도 그리지 않고 종료합니다."""
-    ss = st.session_state
-    if ss.get("selected_cam") != "전체 구역":
-        return
-    # step=1을 주면 Streamlit이 입력창 옆에 -/+ 버튼을 자동으로 붙여줍니다.
-    st.number_input(
-        "카메라 개수", min_value=1, max_value=MAX_CAMERAS, step=1,
-        value=ss.get("grid_count", 4),
-        key="_grid_count_widget", on_change=_sync_grid_count,
-        label_visibility="visible",
-    )
-
-def _sync_selected_cam() -> None:
-    """드롭다운의 변경값을 실제 상태 키(selected_cam)로 복사.
-    카메라 제목 버튼(ui/camera_card.py)도 이 실제 키를 직접 읽고 씁니다."""
-    st.session_state["selected_cam"] = st.session_state["_selected_cam_widget"]
 
 def render() -> None:
     """관제 대시보드 페이지 전체를 렌더링합니다."""
     ss = st.session_state
 
-    # 카메라 제목 버튼 클릭으로 예약된 구역 전환 요청을 드롭다운 위젯이 그려지기 전에 반영합니다.
-    # (위젯이 한 번 그려진 뒤에는 index/value를 다시 넘겨도 무시되므로, 위젯의 실제 key값
-    # 자체를 이 시점에 먼저 맞춰둬야 드롭다운 화면도 한 번에 정확히 갱신됩니다.)
-    pending = ss.pop("_pending_selected_cam", None)
-    if pending is not None:
-        ss["selected_cam"] = pending
-        ss["_selected_cam_widget"] = pending
+    consume_pending_camera_switch()
+    cameras = get_active_cameras()
+    valid_options = get_valid_area_options(cameras)
 
-    # 사용자가 정한 총 개수(grid_count)만큼 카메라 슬롯을 그때그때 생성합니다.
-    # config.CAMERA_NAMES에 없는 번호는 build_camera_list가 "CCTV-NN (구역 N)"으로 자동 생성합니다.
-    total = max(1, min(ss.get("grid_count", 4), MAX_CAMERAS))
-    auto_cols = math.ceil(math.sqrt(total))  # 총 개수를 정사각형에 가깝게 배치 (예: 5개 → 3열, 9개 → 3x3)
-    cameras = build_camera_list(total)
-    cameras = _get_ordered_cameras(cameras)  # 드래그로 저장된 표시 순서 적용
-
-    # ── 그리드 축소 시 리소스 정리 ──
-    # 예: 9칸 → 4칸으로 줄이면 cam5~cam9에 업로드했던 영상의 cv2.VideoCapture 핸들과
-    # 임시파일이 메모리에 남아있을 수 있으므로, 이번 렌더에서 사라진 카메라 ID만 찾아 정리합니다.
-    prev_ids = set(ss.get("_prev_camera_ids", []))
-    curr_ids = {c["id"] for c in cameras}
-    for cid in prev_ids - curr_ids:
-        reset_cam_state(cid)
-    ss["_prev_camera_ids"] = list(curr_ids)  # 다음 렌더에서 비교할 수 있도록 현재 목록을 저장해둠
-
-    # 그리드를 줄였는데 마침 그 사라진 카메라를 집중 보기 중이었다면, selectbox의
-    # options에 없는 값이 남아 에러가 나므로 안전하게 '전체 구역'으로 되돌립니다.
-    valid_options = ["전체 구역"] + [c["name"] for c in cameras]
-    if ss.get("selected_cam") not in valid_options:
-        ss["selected_cam"] = "전체 구역"
+    video_slots = {}
 
     # 좌측(카메라 영역) : 우측(경보 패널) = 6 : 1 비율로 화면을 분할
     left_col, right_col = st.columns([6, 1])
 
-    video_slots = {}     # {camera_id: st.empty()} — 각 카메라의 영상이 표시될 자리
-    progress_slots = {}  # {camera_id: st.empty()} — 각 카메라의 진행률 바가 표시될 자리
-
     with left_col:
-        # ── 헤더 행: 제목 + 구역 선택 드롭다운 + 카메라 개수 스텝퍼 ──
-        _is_grid_mode = ss["selected_cam"] == "전체 구역"
-
-        # '전체 구역'일 때만 카메라 개수/순서 변경 컬럼을 추가로 만듭니다.
-        # 특정 카메라를 볼 때는 이 두 컬럼 자체가 없어야, 구역 선택 드롭다운이
-        # 빈 공간 없이 화면 맨 오른쪽 끝에 자연스럽게 붙습니다.
-        if _is_grid_mode:
-            h1, h2, h3, h4 = st.columns([2.8, 1.2, 1.5, 1.1])
-        else:
-            h1, h2 = st.columns([2.8, 1.2])
-            h3 = h4 = None
-
-        with h1:
-            st.markdown("🔴 **라이브 카메라 피드**")
-        with h2:
-            _cam_options = valid_options
-            _current = ss.get("selected_cam", "전체 구역")
-            st.selectbox(
-                "구역 선택",
-                options=_cam_options,
-                index=_cam_options.index(_current) if _current in _cam_options else 0,
-                key="_selected_cam_widget",
-                on_change=_sync_selected_cam,
-                label_visibility="visible",
-            )
-        if _is_grid_mode:
-            with h3:
-                _render_grid_count_selector()
-            with h4:
-                st.container(height=12, border=False)
-                with st.popover("🔀 카메라 순서 변경"):
-                    new_order = render_camera_reorder(cameras)
-                    if new_order is not None:
-                        ss["camera_order"] = new_order
-                        st.rerun()
-
-        if ss["selected_cam"] == "전체 구역":
-            # 정사각형에 가깝게 자동 계산된 열 수(auto_cols)로 그리드 렌더링
-            render_camera_grid(cameras, video_slots, progress_slots, cols_per_row=auto_cols)
+        is_grid_mode = render_dashboard_header(cameras, valid_options)
+        if is_grid_mode:
+            # 정사각형에 가깝게 자동 계산된 열 수로 그리드 렌더링
+            render_camera_grid(cameras, video_slots, cols_per_row=compute_grid_columns(len(cameras)))
         else:
             # 특정 카메라 1개만 전체 너비로 확대 표시
-            render_camera_focus(cameras, ss["selected_cam"], video_slots, progress_slots)
+            render_camera_focus(cameras, ss["selected_cam"], video_slots)
 
-    # ── 우측: 사람 탐지 경보 패널 ──
     with right_col:
         render_alert_panel()
 
-    # ── 팝업 트리거 확인 ──
-    # popup_id가 비어있고 대기열에 남은 항목이 있으면, 대기열 맨 앞의 항목을 꺼내
-    # 다음 팝업으로 지정합니다. (경보 패널의 '탐지 화면' 클릭으로 popup_id가 직접
-    # 지정된 경우는 대기열과 무관하게 그 항목이 우선 표시됩니다.)
-    if ss.get("popup_id") is None and ss.get("popup_queue"):
-        ss["popup_id"] = ss["popup_queue"].pop(0)
-    popup_id = ss.get("popup_id")
-    if popup_id is not None:
-        target = next((a for a in ss.detection_logs if a["id"] == popup_id), None)
-        if target is not None:
-            show_person_dialog(target)
-        else:
-            ss["popup_id"] = None  # 삭제 등으로 대상이 사라진 경우 안전하게 초기화
+    handle_pending_popup()
 
-    # ------------------------------------------------------------------ #
-    # MASTER STREAMING LOOP (다중 영상 실시간 처리 메인 루프)
-    # ------------------------------------------------------------------ #
-    # 재생 중(playing_{id}=True)인 카메라만 골라 재생 루프에 전달합니다.
-    # 재생 중인 영상이 하나도 없으면 루프를 아예 실행하지 않아 불필요한 대기를 피합니다.
+    # 재생 중인 카메라가 있으면 여기서 반복문이 넘겨받아 계속 프레임을 갱신합니다.
     active_cams = [cam for cam in cameras if ss.get(f"playing_{cam['id']}")]
     if active_cams:
-        run_playback_loop(active_cams, video_slots, progress_slots)
+        run_playback_loop(active_cams, video_slots, {})

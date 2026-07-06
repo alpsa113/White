@@ -48,7 +48,7 @@ def render() -> None:
     # 데모 모드일 때만 의미가 있으므로, 꺼져 있으면 슬라이더 자체를 비활성화
     st.slider(
         "사람 등장 비율", 0.00, 1.00,
-        value=ss.get("person_ratio", 0.5),
+        value=ss.get("person_ratio", 0.03),
         step=0.01,
         disabled=not ss.get("simulate", True),
         key="_person_ratio_widget",
