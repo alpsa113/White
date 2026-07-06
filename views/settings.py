@@ -85,3 +85,9 @@ def render() -> None:
         if ss.get("_db_init_error"):
             with st.expander("RDS 연결 오류 보기"):
                 st.code(ss["_db_init_error"])
+
+    # S3_ENABLED는 state.py에서 s3.is_enabled() 결과로 갱신됩니다 (secrets.toml [s3] 설정 여부).
+    if ss.get("S3_ENABLED"):
+        st.success("🟢 S3 연결됨 — 탐지 스냅샷 이미지가 영구 저장됩니다.")
+    else:
+        st.warning("🟡 S3 미연결 — 스냅샷은 메모리에만 보관되며 재시작 시 사라짐.")
