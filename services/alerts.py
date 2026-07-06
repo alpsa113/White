@@ -7,7 +7,6 @@ services/alerts.py — 탐지 이벤트(알람) 등록/갱신 및 DB 동기화
 담당합니다. RDS/S3 연동 실패는 예외로 앱을 죽이지 않고 경고 배너로만 알립니다.
 """
 import io
-import time
 from datetime import datetime
 
 import streamlit as st
@@ -15,7 +14,7 @@ from PIL import Image
 
 import db_rds as db
 import s3_storage as s3
-from config import FALLBACK_CONF_THRESH, FALLBACK_NMS_THRESH, AUTO_POPUP_COOLDOWN
+from config import FALLBACK_CONF_THRESH, FALLBACK_NMS_THRESH
 
 
 def persist_log(alert: dict) -> None:
@@ -106,14 +105,12 @@ def create_detection_alert(cam_name: str, class_name: str, conf: float, frames: 
     if record.get("show_on_dashboard"):
         ss.dashboard_alerts.append(record)
 
-    # 사람 탐지 자동 팝업 — 쿨다운(AUTO_POPUP_COOLDOWN) 안에 있으면 팝업을 억제하여 도배 방지
+    # 사람 탐지 자동 팝업 — 탐지된 사람은 모두 대기열에 쌓여 순서대로 팝업으로 표시됩니다.
+    # (같은 사람이 계속 화면에 있는 경우는 update_detection_alert()가 처리하므로 여기서
+    #  중복 추가될 일은 없습니다 — 이 블록은 '새로운' 사람이 탐지됐을 때만 호출됩니다.)
     if show_on_dash and ss.get("auto_popup", True):
-        current_time = time.time()
-        last_popup = ss.get("last_auto_popup_time", 0)
-
-        if current_time - last_popup > AUTO_POPUP_COOLDOWN:
-            ss["popup_id"] = aid
-            ss["last_auto_popup_time"] = current_time
+        ss.setdefault("popup_queue", [])
+        ss["popup_queue"].append(aid)
 
     return aid
 
@@ -121,15 +118,16 @@ def create_detection_alert(cam_name: str, class_name: str, conf: float, frames: 
 def update_detection_alert(aid: int, conf: float, frames: int, snapshot: Image.Image | None):
     """영상에서 지속적으로 추적 중인 동일 객체의 '최대 신뢰도'와 '누적 추적 프레임' 값만
     조용히 갱신합니다. 신규 알람을 추가 생성하지 않아 같은 사람이 계속 화면에 있어도
-    로그가 도배되지 않습니다."""
+    로그가 도배되지 않습니다. show_on_dashboard 여부는 생성 시점에 이미 확정된 값을
+    그대로 유지하며, 이 함수가 임의로 바꾸지 않습니다 (사람/동물 모두 이 함수를
+    공유하므로, 여기서 값을 바꾸면 동물이 경보 패널에 잘못 노출될 수 있습니다)."""
     ss = st.session_state
     for a in ss.detection_logs:
         if a["id"] == aid:
             a["confidence"] = max(a["confidence"], conf)
             a["hit_frames"] = frames
-            a["show_on_dashboard"] = True
-            # 경보 패널에 아직 없으면 추가 (예: 동물로 시작했다가 사람으로 재분류되는 경우 대비)
-            if not any(d["id"] == aid for d in ss.dashboard_alerts):
+            # 사람(show_on_dashboard=True)인 경우에만 경보 패널에 추가/유지
+            if a.get("show_on_dashboard") and not any(d["id"] == aid for d in ss.dashboard_alerts):
                 ss.dashboard_alerts.append(a)
             if snapshot is not None:
                 a["snapshot"] = snapshot  # 더 선명한/최신 프레임으로 스냅샷 교체

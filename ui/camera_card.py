@@ -8,6 +8,8 @@ render_camera_card() 하나로 구현해두었고, 그리드/집중보기 함수
 import tempfile
 
 import streamlit as st
+from streamlit_sortables import sort_items
+from streamlit_cropper import st_cropper
 from PIL import Image
 
 import s3_storage as s3
@@ -20,6 +22,30 @@ try:
 except ImportError:
     cv2 = None
 
+@st.dialog("🔍 영역 확대", width="large")
+def show_zoom_dialog(cam_name: str, image: Image.Image) -> None:
+    """정지된 프레임 위에서 사용자가 드래그로 선택한 영역만 잘라내어 확대 표시합니다.
+    실시간으로 계속 갱신되는 화면(재생 중인 영상)에는 적용하지 않습니다 — 커스텀
+    컴포넌트가 매 프레임 재생성되면 불안정해질 수 있기 때문입니다."""
+    st.caption(f"{cam_name} — 마우스로 드래그해서 확대할 영역을 선택하세요.")
+
+    col_select, col_zoom = st.columns(2)
+    with col_select:
+        st.markdown("**드래그로 영역 선택**")
+        cropped = st_cropper(
+            image,
+            realtime_update=True,
+            box_color="#f85149",
+            aspect_ratio=None,
+            return_type="image",
+            should_resize_image=True,  # 미리보기는 최대 700px로 자동 축소, 자르기는 원본 해상도 기준
+        )
+    with col_zoom:
+        st.markdown("**확대 결과**")
+        st.image(cropped, use_container_width=True)
+
+    if st.button("닫기", use_container_width=True):
+        st.rerun()
 
 def render_camera_card(cam: dict, video_slots: dict, progress_slots: dict) -> None:
     """카메라 1대에 대한 카드(제목 + 업로드 팝오버 + 영상 슬롯)를 렌더링합니다.
@@ -29,10 +55,16 @@ def render_camera_card(cam: dict, video_slots: dict, progress_slots: dict) -> No
     cid = cam["id"]
 
     with st.container(border=True):
-        c1, c2 = st.columns([0.85, 0.15])
-        with c1:
-            st.markdown(f"**{cam['name']}**")
-        with c2:
+        with st.container(horizontal=True, horizontal_alignment="distribute"):
+            # 그리드('전체 구역') 상태에서만 제목을 클릭해 확대 전환할 수 있게 합니다.
+            # tertiary 버튼  CSS로 일반 볼드 텍스트처럼 보이게 스타일링했지만, 실제로는
+            # Streamlit 버튼이라 URL 변경 없이 구역 선택 드롭다운과 동일하게 매끄럽게 전환됩니다.
+            if st.session_state.get("selected_cam") == "전체 구역":
+                if st.button(f"**{cam['name']}**", key=f"title_btn_{cid}", type="tertiary"):
+                    st.session_state["_pending_selected_cam"] = cam["name"]
+                    st.rerun()
+            else:
+                st.markdown(f"**{cam['name']}**")
             # ⚙️ 팝오버 안에 업로드/초기화 기능을 숨겨 카드 자체는 항상 깔끔하게 유지
             with st.popover("⚙️"):
                 uploaded = st.file_uploader(
@@ -80,13 +112,26 @@ def render_camera_card(cam: dict, video_slots: dict, progress_slots: dict) -> No
 
         # 카드 하단 상태 표시: 업로드 전 안내 → 결과 이미지 → (영상이면) 완료 표시
         if ss.get(f"fp_{cid}") is None:
-            video_slots[cid].info("대기 중 — ⚙️ 아이콘을 눌러 업로드하세요")
+            video_slots[cid].info("⚙️ 아이콘을 눌러 업로드")
         elif not ss.get(f"playing_{cid}"):
             result = ss.get(f"result_{cid}")
             if result:
                 video_slots[cid].image(result, use_container_width=True)
+                if st.button("🔍 영역 확대", key=f"zoom_btn_{cid}", use_container_width=True):
+                    show_zoom_dialog(cam["name"], result)
+                # cap_{cid}가 아직 열려 있고, 아직 끝까지 재생되지 않았다면 '일시정지 후' 상태 → 재개 가능
+                cap = ss.get(f"cap_{cid}")
+                if cap is not None and cap.isOpened() and not ss.get(f"finished_{cid}"):
+                    if st.button("▶️ 재개", key=f"resume_btn_{cid}", use_container_width=True):
+                        ss[f"playing_{cid}"] = True
+                        st.rerun()
             if ss.get(f"finished_{cid}"):
                 st.caption("✅ 영상 분석 완료")
+        else:
+            # 재생 중일 때는 확대 대신 '일시정지' 버튼만 노출 — 정지해야 그 프레임을 확대할 수 있음
+            if st.button("⏸️ 일시정지", key=f"pause_btn_{cid}", use_container_width=True):
+                ss[f"playing_{cid}"] = False
+                st.rerun()
 
 
 def render_camera_grid(cameras: list[dict], video_slots: dict, progress_slots: dict, cols_per_row: int) -> None:
@@ -109,6 +154,33 @@ def render_camera_focus(cameras: list[dict], cam_name: str, video_slots: dict, p
         render_camera_card(cam, video_slots, progress_slots)
 
 
+def render_camera_reorder(cameras: list[dict]) -> list[str] | None:
+    """카메라 이름 목록을 드래그로 정렬할 수 있는 위젯을 표시합니다.
+    사용자가 드래그로 순서를 바꾸면 새 순서의 카메라 id 리스트를 반환하고,
+    변경이 없으면 None을 반환합니다.
+
+    ⚠️ 영상이 재생 중일 때는 화면이 자주 다시 그려져(rerun) 이 컴포넌트가
+    불안정해질 수 있습니다 — 재생을 잠시 멈춘 상태에서 순서를 조정하는 것을 권장합니다.
+    """
+    name_to_id = {c["name"]: c["id"] for c in cameras}
+    current_names = [c["name"] for c in cameras]
+
+    st.caption("이름표를 드래그해서 순서를 바꾸세요.")
+    # 기본 빨간색 대신 시스템 톤(짙은 남색 계열)에 맞춘 이름표 색상
+    _sortable_style = """
+    .sortable-item {
+        background-color: transparent;
+        border: 1px solid var(--text-color);
+        color: var(--text-color);
+    }
+    """
+    sorted_names = sort_items(current_names, direction="horizontal", custom_style=_sortable_style)
+
+    if sorted_names != current_names:
+        return [name_to_id[n] for n in sorted_names]
+    return None
+
+
 @st.dialog("🚨 사람 탐지 상세", width="small")
 def show_person_dialog(alert: dict) -> None:
     """특정 탐지 로그의 스냅샷 이미지와 상세 정보를 화면 중앙에 크게 띄워주는 다이얼로그(팝업)입니다.
@@ -129,7 +201,7 @@ def show_person_dialog(alert: dict) -> None:
         st.info("표시할 스냅샷이 없습니다.")
 
     extra = f" · 누적 {alert['hit_frames']}프레임 추적" if alert["source"] == "영상" else ""
-    st.markdown(f"**{alert['camera']}** — {alert['class_name']} 신뢰도 {alert['confidence']:.0%}")
+    st.markdown(f"**{alert['camera']}** — {alert['class_name']}: 신뢰도 {alert['confidence']:.0%}")
     st.caption(f"{alert['source']}{extra} · {alert['date']} {alert['time']}")
     if st.button("닫기", use_container_width=True):
         ss.popup_id = None

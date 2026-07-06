@@ -40,13 +40,7 @@ def _render_status_badge() -> None:
 @st.fragment(run_every=1)
 def _render_clock() -> None:
     """1초마다 독립적으로 재실행되는 실시간 시계 컴포넌트입니다 (fragment 덕분에 전체
-    페이지가 아니라 이 부분만 갱신되어 다른 UI에 영향을 주지 않습니다).
-
-    표시 여부(show_clock) 판단을 이 함수 안에서 직접 하는 것이 중요합니다 — fragment의
-    자체 갱신 주기와 "보일지 말지" 판단이 항상 같은 타이밍에 함께 평가되어야, 페이지
-    전환 시점과 갱신 시점이 어긋나 시계가 깜빡이는 문제를 피할 수 있습니다."""
-    if not st.session_state.get("show_clock", True):
-        return
+    페이지가 아니라 이 부분만 갱신되어 다른 UI에 영향을 주지 않습니다). 항상 표시됩니다."""
     now = datetime.now()
     # 라벨("현재 시각")은 작게, 오전/오후는 중간 크기, 실제 시:분:초는 크고 굵게 표시하여 시각적 강조 차등을 둠
     st.markdown(

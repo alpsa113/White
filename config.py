@@ -27,7 +27,6 @@ PERSON_CLASSES = {"사람"}
 DETECT_INTERVAL = 4            # N 프레임마다 한 번만 백엔드 API에 추론을 요청합니다. (나머지 프레임은 직전 박스를 그대로 유지)
 PERSON_GAP_TOLERANCE = 10      # 화면에서 사람이 사라져도 N 프레임 동안은 추적을 끊지 않고 대기합니다. (깜빡임으로 인한 중복 알람 방지)
 ANIMAL_TOAST_COOLDOWN = 10     # 같은 동물이 계속 탐지될 때, 알림이 도배되지 않도록 N초 동안 추가 토스트를 억제합니다.
-AUTO_POPUP_COOLDOWN = 15       # 사람 탐지 팝업이 한 번 뜨면 N초 동안은 새 팝업을 자동으로 띄우지 않습니다.
 
 # 신뢰도 임계값(conf_thresh)의 단일 fallback 지점입니다.
 # 정상 동작 시 conf_thresh는 항상 backend.py의 응답(conf_thresh_used)에서 가져오며,
@@ -54,15 +53,9 @@ VIDEO_EXTS = ("mp4", "mov", "avi", "mkv")
 # ------------------------------------------------------------------ #
 # 카메라 목록 — 사용자가 대시보드에서 카메라 개수를 조절하면 이 목록도 그에 맞게 늘어나거나 줄어듭니다.
 # ------------------------------------------------------------------ #
-# 실제 초소 이름을 순서대로 미리 정의해두고, 요청 개수가 이 목록보다 많으면
-# 초과분은 "CCTV-NN (구역 N)" 형태로 자동 생성합니다.
-CAMERA_NAMES = [
-    "CCTV-01 (초소 A)",
-    "CCTV-02 (초소 B)",
-    "CCTV-03 (철책 C구간)",
-    "CCTV-04 (감시초소 D)",
-]
-MAX_CAMERAS = 9  # 그리드가 지원하는 최대 카메라 슬롯 수 (칸이 너무 많아지면 미관/PC 디코딩 부담이 커지므로 상한을 둠)
+# 카메라 이름은 "CCTV-NN (구역 N)" 형식으로 1~16번까지 통일합니다.
+CAMERA_NAMES: list[str] = []  # 특별히 지정할 이름이 없으므로 build_camera_list()가 전부 자동 생성
+MAX_CAMERAS = 16  # 그리드가 지원하는 최대 카메라 슬롯 수
 
 
 def build_camera_list(count: int) -> list[dict]:
@@ -74,7 +67,6 @@ def build_camera_list(count: int) -> list[dict]:
     count = max(1, min(count, MAX_CAMERAS))
     cams = []
     for i in range(count):
-        # 미리 정의된 이름이 있으면 그것을 쓰고, 없으면 자동 생성된 이름을 사용
-        name = CAMERA_NAMES[i] if i < len(CAMERA_NAMES) else f"CCTV-{i+1:02d} (구역 {i+1})"
+        name = f"CCTV-{i+1:02d} (구역 {i+1})"
         cams.append({"id": f"cam{i+1}", "name": name})
     return cams

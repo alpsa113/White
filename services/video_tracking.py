@@ -46,7 +46,7 @@ def reset_cam_state(cid: str):
 
     # 이 카메라와 관련된 모든 session_state 키를 일괄 제거
     for k in ("cap", "tmp_path", "cursor", "total_frames", "playing", "finished",
-              "result", "person_tracks", "animals_visible", "last_dets", "last_toasts", "fp"):
+            "result", "person_tracks", "animal_tracks", "animals_visible", "last_dets", "last_toasts", "fp"):
         st.session_state.pop(f"{k}_{cid}", None)
 
 
@@ -89,16 +89,6 @@ def process_frame(cam: dict, image: Image.Image, source: str, single: bool, time
                                    nms_thresh=nms_thresh)
         if persons:
             is_new_alert = True
-
-        # 개체 단위로 순회하여 같은 클래스가 여러 마리 탐지되어도 각각 별도 로그로 기록
-        for animal_det in [d for d in dets if not is_person(d["class_name"])]:
-            create_detection_alert(sname, animal_det["class_name"], animal_det["confidence"],
-                                   1, source, annotated, False,
-                                   box=animal_det["box"],
-                                   timestamp_ms=timestamp_ms,
-                                   latency_ms=latency_ms,
-                                   conf_thresh=conf_thresh,
-                                   nms_thresh=nms_thresh)
 
     # ── 영상 스트리밍 처리: 프레임 간 지속성을 추적하여 같은 사람에 대한 중복 알람을 방지 ──
     else:
@@ -155,24 +145,60 @@ def process_frame(cam: dict, image: Image.Image, source: str, single: bool, time
     toasted_classes = set()  # 이번 프레임에서 이미 토스트를 띄운 클래스 (같은 프레임 내 중복 토스트 방지)
     animals_list = [d for d in dets if not is_person(d["class_name"])]
 
-    for animal_det in animals_list:
-        animal = animal_det["class_name"]
-        if now - last_toasts.get(animal, 0) > ANIMAL_TOAST_COOLDOWN:
-            if animal not in toasted_classes:
-                st.toast(f"{animal} 탐지 — {sname}", icon="🐾")
-                last_toasts[animal] = now
-                toasted_classes.add(animal)
+    # 클래스별로 인스턴스를 분리 추적합니다: {"멧돼지": {0: {...}, 1: {...}}, "고라니": {...}}
+    # 같은 클래스 안에서만 프레임별 탐지 순서(인덱스)로 동일 개체를 매칭합니다 — 사람 추적과 동일한 방식.
+    animal_tracks = s.setdefault(f"animal_tracks_{cid}", {})
+    by_class: dict[str, list[dict]] = {}
+    for det in animals_list:
+        by_class.setdefault(det["class_name"], []).append(det)
 
-            if annotated is None:
-                annotated = draw_boxes(image, dets)
-            # 로그는 토스트 여부와 무관하게 탐지된 개체마다 각각 생성
-            create_detection_alert(sname, animal, animal_det["confidence"],
-                                   1, source, annotated, False,
-                                   box=animal_det["box"],
-                                   timestamp_ms=timestamp_ms,
-                                   latency_ms=latency_ms,
-                                   conf_thresh=conf_thresh,
-                                   nms_thresh=nms_thresh)
+    for cls_name, items in by_class.items():
+        cls_tracks = animal_tracks.setdefault(cls_name, {})
+
+        # 토스트는 여전히 클래스당 쿨다운 적용 (도배 방지) — 트래킹과는 독립적으로 유지
+        if now - last_toasts.get(cls_name, 0) > ANIMAL_TOAST_COOLDOWN and cls_name not in toasted_classes:
+            st.toast(f"{cls_name} 탐지 — {sname}", icon="🐾")
+            last_toasts[cls_name] = now
+            toasted_classes.add(cls_name)
+
+        if annotated is None:
+            annotated = draw_boxes(image, dets)
+
+        for i, det in enumerate(items):
+            conf = det["confidence"]
+            if i not in cls_tracks:
+                # 새로운 개체 등장 → 신규 로그 1건 생성
+                aid = create_detection_alert(sname, cls_name, conf, 1, source, annotated, False,
+                                             box=det["box"],
+                                             timestamp_ms=timestamp_ms,
+                                             latency_ms=latency_ms,
+                                             conf_thresh=conf_thresh,
+                                             nms_thresh=nms_thresh)
+                cls_tracks[i] = {"id": aid, "gap": 0, "max": conf, "frames": 1}
+            else:
+                # 이미 추적 중인 개체 → 새 로그 없이 기존 로그의 신뢰도/프레임 수만 갱신
+                cls_tracks[i]["gap"] = 0
+                cls_tracks[i]["frames"] += 1
+                if conf > cls_tracks[i]["max"]:
+                    cls_tracks[i]["max"] = conf
+                    update_detection_alert(cls_tracks[i]["id"], conf, cls_tracks[i]["frames"], annotated)
+                else:
+                    update_detection_alert(cls_tracks[i]["id"], cls_tracks[i]["max"], cls_tracks[i]["frames"], None)
+
+        # 이번 프레임에서 사라진 개체 → gap 증가, 허용치를 넘으면 추적 종료
+        for i in list(cls_tracks.keys()):
+            if i >= len(items):
+                cls_tracks[i]["gap"] += 1
+                if cls_tracks[i]["gap"] >= PERSON_GAP_TOLERANCE:
+                    del cls_tracks[i]
+
+    # 이번 프레임에 아예 등장하지 않은 클래스 → 해당 클래스의 모든 트랙 gap 증가
+    for cls_name in list(animal_tracks.keys()):
+        if cls_name not in by_class:
+            for i in list(animal_tracks[cls_name].keys()):
+                animal_tracks[cls_name][i]["gap"] += 1
+                if animal_tracks[cls_name][i]["gap"] >= PERSON_GAP_TOLERANCE:
+                    del animal_tracks[cls_name][i]
 
     return dets, is_new_alert
 
@@ -180,9 +206,17 @@ def process_frame(cam: dict, image: Image.Image, source: str, single: bool, time
 def run_playback_loop(active_cams: list[dict], video_slots: dict, progress_slots: dict) -> None:
     """활성화된(재생 중인) 여러 카메라 피드의 프레임을 번갈아 처리하며 화면을 갱신하는
     메인 재생 루프입니다. 새로운 알람이 발생했을 때만 전체 페이지를 rerun하여
-    우측 경보 패널을 갱신합니다 (그 외에는 비디오 슬롯만 직접 갱신하여 오버헤드를 줄임)."""
+    우측 경보 패널을 갱신합니다 (그 외에는 비디오 슬롯만 직접 갱신하여 오버헤드를 줄임).
+
+    다만 알람이 한동안 없으면 이 반복문이 Streamlit에 제어권을 계속 안 돌려줘서,
+    그 사이 사용자가 누른 버튼(팝업 닫기 등)이 반영되지 않는 문제가 있었습니다.
+    그래서 알람 여부와 무관하게 최소 YIELD_INTERVAL마다 한 번씩은 강제로 리런하여,
+    대기 중인 사용자 조작이 지체 없이 처리되도록 합니다."""
     ss = st.session_state
     need_ui_refresh = False
+
+    loop_start = time.time()
+    YIELD_INTERVAL = 1.5  # 이 시간(초)마다 최소 한 번은 제어권을 Streamlit에 돌려줌
 
     while True:
         frames_processed = 0
@@ -247,5 +281,10 @@ def run_playback_loop(active_cams: list[dict], video_slots: dict, progress_slots
         # 이번 루프에서 처리된 프레임이 하나도 없으면(모든 영상 재생 종료) 루프 탈출
         if frames_processed == 0:
             break
+
+        # 알람이 없어도 일정 시간마다 강제로 리런하여, 그동안 쌓인 사용자 상호작용
+        # (다이얼로그 닫기, 일시정지 버튼 등)이 지체 없이 처리되도록 합니다.
+        if time.time() - loop_start > YIELD_INTERVAL:
+            st.rerun()
 
     st.rerun()

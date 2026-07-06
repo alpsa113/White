@@ -57,30 +57,13 @@ def render() -> None:
 
     st.divider()
 
-    # ── 화면 표시 설정 ──
-    st.markdown("**화면 표시**")
-
-    def _sync_show_clock():
-        """토글 값을 실제 상태 키(show_clock)로 복사 — ui/layout.py의 _render_clock()이 이 값을 참조합니다."""
-        ss["show_clock"] = ss["_show_clock_widget"]
-
-    # 상단 실시간 시계 표시 여부 — 대시보드/로그 페이지 등 모든 화면에서 공통으로 적용됨
-    st.toggle(
-        "상단 실시간 시계 표시",
-        value=ss.get("show_clock", True),
-        key="_show_clock_widget",
-        on_change=_sync_show_clock,
-    )
-
-    st.divider()
-
     # ── 시스템 상태 표시 ──
     st.markdown("**시스템 상태**")
     # DB_ENABLED는 state.py에서 앱이 리런될 때마다 db.init_db() 결과로 갱신됩니다.
     if ss.get("DB_ENABLED"):
-        st.success("🟢 RDS 연결됨 — 로그가 영구 저장됩니다.")
+        st.success("🟢 RDS 연결됨 - 로그가 영구 저장됩니다.")
     else:
-        st.warning("🟡 메모리 모드 — RDS 미연결 (로그는 재시작 시 사라짐).")
+        st.warning("🟡 메모리 모드 - RDS 미연결 (로그는 재시작 시 사라짐).")
         # init_db() 실패 시 db_rds.py가 이 키에 상세 에러 메시지를 남겨둡니다.
         if ss.get("_db_init_error"):
             with st.expander("RDS 연결 오류 보기"):
@@ -88,6 +71,6 @@ def render() -> None:
 
     # S3_ENABLED는 state.py에서 s3.is_enabled() 결과로 갱신됩니다 (secrets.toml [s3] 설정 여부).
     if ss.get("S3_ENABLED"):
-        st.success("🟢 S3 연결됨 — 탐지 스냅샷 이미지가 영구 저장됩니다.")
+        st.success("🟢 S3 연결됨 - 탐지 스냅샷 이미지가 영구 저장됩니다.")
     else:
-        st.warning("🟡 S3 미연결 — 스냅샷은 메모리에만 보관되며 재시작 시 사라짐.")
+        st.warning("🟡 S3 미연결 - 스냅샷은 메모리에만 보관되며 재시작 시 사라짐.")
