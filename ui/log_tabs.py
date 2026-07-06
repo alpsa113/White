@@ -23,10 +23,8 @@ def _build_view_df(sorted_logs: list[dict]) -> pd.DataFrame:
             "탐지 ID":        a.get("id"),
             "카메라":         a.get("camera", ""),
             "탐지 일시":      fmt_dt(a),
-            "입력 소스":      fmt_src(a),
             "클래스명":       a.get("class_name", ""),
             "신뢰도 (Score)": f"{float(a.get('score', a.get('confidence', 0))):.1%}",
-            "BBox 좌표":      fmt_bbox(a),
             "이미지 URI":     a.get("uri", a.get("image_path", "")),  # 표에는 안 보이고 이미지 로딩용으로만 사용
         })
     return pd.DataFrame(df_data)
@@ -86,7 +84,7 @@ def render_view_tab(sorted_logs: list[dict]) -> None:
             f"Score: **{float(sel_log.get('score', sel_log.get('confidence', 0))):.1%}**",
             unsafe_allow_html=True
         )
-        st.caption(f"🕒 {fmt_dt(sel_log)} &nbsp;·&nbsp; BBox: {sel_row['BBox 좌표']}")
+        st.caption(f"🕒 {fmt_dt(sel_log)}")
         st.divider()
 
         # 이미지 로딩 우선순위: 메모리 스냅샷(이번 세션 탐지) → S3 다운로드(과거 이력)
@@ -121,10 +119,8 @@ def render_manage_tab(sorted_logs: list[dict]) -> None:
             "탐지 ID":    a.get("id"),                                    # PK — 수정 불가
             "탐지 일시":  fmt_dt(a),
             "카메라":     a.get("camera", ""),
-            "입력 소스":  fmt_src(a),
             "클래스명":   a.get("class_name", ""),
             "신뢰도 (%)": round(float(a.get("score", a.get("confidence", 0))) * 100, 1),
-            "BBox 좌표":  fmt_bbox(a),                                     # 수정 불가 (모델이 산출한 값이므로)
             "이미지 경로": a.get("uri", a.get("image_path", "")),
             "상태":       a.get("status", "대기"),
             "비고":       a.get("remarks", ""),
@@ -151,9 +147,6 @@ def render_manage_tab(sorted_logs: list[dict]) -> None:
                 "탐지 일시", help="YYYY-MM-DD HH:MM:SS"
             ),
             "카메라": st.column_config.TextColumn("카메라"),
-            "입력 소스": st.column_config.SelectboxColumn(
-                "입력 소스", options=["video", "image"], required=True
-            ),
             "클래스명": st.column_config.SelectboxColumn(
                 "클래스명", options=known_classes, required=True
             ),
@@ -161,9 +154,6 @@ def render_manage_tab(sorted_logs: list[dict]) -> None:
                 "신뢰도 (%)",
                 min_value=0.0, max_value=100.0,
                 step=0.1, format="%.1f%%",
-            ),
-            "BBox 좌표": st.column_config.TextColumn(
-                "BBox 좌표", help="수정 불가 (x1, y1, x2, y2)"
             ),
             "이미지 경로": st.column_config.TextColumn(
                 "이미지 경로", help="S3 이미지 경로"
