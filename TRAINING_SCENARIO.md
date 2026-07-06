@@ -410,8 +410,8 @@ python tools/convert_forestpersons_phase.py \
   --phase1-output data/mini_test/phase1_raw/single \
   --phase3-output data/mini_test/gop_raw/single \
   --metadata-output data/mini_test/forestpersons_conversion_metadata.csv \
-  --phase1-count 1500 \
-  --phase3-count 2500 \
+  --phase1-count 4000 \
+  --phase3-count 2000 \
   --overwrite
 ```
 

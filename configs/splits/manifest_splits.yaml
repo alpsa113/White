@@ -1,10 +1,10 @@
 seed: 42
-val_ratio: 0.2
+val_ratio: 0.1
 output_dir: data/manifests
 
 phases:
   phase1:
-    val_ratio: 0.2
+    val_ratio: 0.1
     sources:
       - name: phase1_single
         format: gop_class_yolo
@@ -22,7 +22,7 @@ phases:
           thermal: [0.0, 0.3, 0.0]
 
   phase2:
-    val_ratio: 0.2
+    val_ratio: 0.1
     sources:
       - name: phase2_pair
         format: gop_class_yolo_pair
@@ -38,7 +38,7 @@ phases:
         tags: [real_pair]
 
   phase3:
-    val_ratio: 0.2
+    val_ratio: 0.1
     sources:
       - name: gop_raw_single
         format: gop_class_yolo

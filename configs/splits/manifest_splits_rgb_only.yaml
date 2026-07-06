@@ -2,12 +2,12 @@
 # Phase2는 RGB-TIR pair fusion 학습 단계이므로 RGB-only 실험에서는 생략합니다.
 
 seed: 42
-val_ratio: 0.2
+val_ratio: 0.1
 output_dir: data/manifests_rgb_only
 
 phases:
   phase1:
-    val_ratio: 0.2
+    val_ratio: 0.1
     sources:
       - name: phase1_rgb_only
         format: gop_class_yolo
@@ -23,7 +23,7 @@ phases:
           rgb: [0.0, 0.5, 1.0]
 
   phase3:
-    val_ratio: 0.2
+    val_ratio: 0.1
     sources:
       - name: gop_rgb_only
         format: gop_class_yolo

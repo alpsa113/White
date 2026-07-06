@@ -174,8 +174,8 @@ ForestPersons는 person RGB 데이터로만 사용하며, 원본은 보존하고
 python tools/convert_forestpersons_phase.py \
   --phase1-output data/mini_test/phase1_raw/single \
   --phase3-output data/mini_test/gop_raw/single \
-  --phase1-count 1500 \
-  --phase3-count 2500 \
+  --phase1-count 4000 \
+  --phase3-count 2000 \
   --overwrite
 ```
 
