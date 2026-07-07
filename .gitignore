@@ -1,5 +1,6 @@
 .DS_Store
 .Rhistory
+.vscode/
 __pycache__/
 *.py[cod]
 TRAINING_SMOKE_TEST.md
