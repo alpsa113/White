@@ -17,19 +17,3 @@ def fmt_dt(a: dict) -> str:
         time_part = a.get("time", "")
         val = f"{date_part} {time_part}".strip() if date_part else time_part
     return str(val)[:19]  # 마이크로초 등 불필요한 부분은 잘라내어 "YYYY-MM-DD HH:MM:SS" 형태로 고정
-
-
-def fmt_src(a: dict) -> str:
-    """입력 소스를 "video" / "image" 중 하나로 정규화합니다.
-    실시간 영상 처리 로직은 source="영상"(한글)을 쓰고, DB 레코드는
-    input_type="video"|"image"(영문)를 쓰기 때문에 이 둘을 하나로 맞춰줍니다."""
-    raw = a.get("input_type") or a.get("source", "video")
-    return raw if raw in ("video", "image") else "video"
-
-
-def fmt_bbox(a: dict) -> str:
-    """바운딩 박스 좌표를 "[x1, y1, x2, y2]" 문자열로 포맷하여 표에 표시하기 좋게 만듭니다."""
-    return (
-        f"[{a.get('x1', 0):.1f}, {a.get('y1', 0):.1f}, "
-        f"{a.get('x2', 0):.1f}, {a.get('y2', 0):.1f}]"
-    )

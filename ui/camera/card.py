@@ -9,8 +9,10 @@ ui/camera/zoom.py에, 탐지 로직은 services/tracking.py·playback.py에 위�
 import tempfile
 import streamlit as st
 from PIL import Image
+from urllib.parse import quote
 
 from config import IMAGE_EXTS, VIDEO_EXTS
+from config import API_BASE_URL
 from services.playback import reset_cam_state, HAS_CV2
 from services.tracking import process_frame
 from services.detection import draw_boxes
@@ -33,7 +35,7 @@ def render_camera_card(cam: dict, video_slots: dict) -> None:
     ss = st.session_state
     cid = cam["id"]
 
-    with st.container(border=True):
+    with st.container(border=True, key=f"card_{cid}"):
         # 제목 줄 — 그리드에서는 클릭 가능한 버튼(집중 보기로 전환), 집중 보기에서는 일반 텍스트
         with st.container(horizontal=True, horizontal_alignment="distribute"):
             if ss.get("selected_cam") == "전체 구역":
@@ -116,7 +118,21 @@ def _render_image_area(cam: dict, is_grid: bool, video_slots: dict):
     st.markdown(ZOOM_OVERLAY_CSS_TEMPLATE.format(cid=cid), unsafe_allow_html=True)
     with st.container(key=f"img_wrap_{cid}"):
         image_slot = st.empty()
-        video_slots[cid] = image_slot
+
+        # 데모 모드가 아니고, 영상이 재생 중이면 백엔드 MJPEG 스트림으로 화면을 채웁니다.
+        # 이 경우 run_playback_loop가 이 슬롯에 직접 프레임을 쓰지 않도록
+        # video_slots에 등록하지 않습니다 (탐지/로그/알람은 그쪽에서 계속 별도로 처리됨).
+        tmp_path = ss.get(f"tmp_path_{cid}")
+        use_stream = (not ss.get("simulate", True)) and HAS_CV2 and tmp_path and ss.get(f"playing_{cid}")
+        if use_stream:
+            fps = ss.get(f"fps_{cid}", 30.0)
+            stream_url = f"{API_BASE_URL}/stream?path={quote(tmp_path)}&fps={fps}"
+            image_slot.markdown(
+                f'<img src="{stream_url}" style="width:100%; border-radius:4px; display:block;">',
+                unsafe_allow_html=True,
+            )
+        else:
+            video_slots[cid] = image_slot
 
         if is_grid:
             # 그리드 모드면 재생/일시정지 상태와 무관하게 항상 "크게 보기" 아이콘 노출

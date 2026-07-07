@@ -12,10 +12,16 @@ FastAPI 백엔드 — 모델 추론 담당
 import io
 import os
 import time
+import threading
+from urllib.parse import unquote
 
 from fastapi import FastAPI, UploadFile, File
+from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from PIL import Image
+
+import cv2
+from services.detection import draw_boxes
 
 app = FastAPI(title="탐지 추론 API")
 
@@ -37,6 +43,7 @@ CONF_THRESHOLD = float(os.getenv("CONF_THRESHOLD", "0.7"))
 NMS_THRESHOLD = float(os.getenv("NMS_THRESHOLD", "0.7"))
 
 model = None
+model_lock = threading.Lock()  # 여러 스레드가 동시에 model()을 호출하지 못하도록 보호
 
 @app.on_event("startup")
 def load_model():
@@ -65,7 +72,8 @@ async def detect(image: UploadFile = File(...)):
     pil_img = Image.open(io.BytesIO(data)).convert("RGB")
 
     start_time = time.perf_counter()
-    results = model(pil_img, conf=CONF_THRESHOLD, iou=NMS_THRESHOLD, verbose=False)[0]
+    with model_lock:
+        results = model(pil_img, conf=CONF_THRESHOLD, iou=NMS_THRESHOLD, verbose=False)[0]
     latency_ms = round((time.perf_counter() - start_time) * 1000, 3)
 
     detections = []
@@ -94,3 +102,78 @@ async def detect(image: UploadFile = File(...)):
 def health():
     """서버가 정상적으로 작동 중인지 확인하는 상태 체크 엔드포인트입니다."""
     return {"status": "ok", "model_loaded": model is not None}
+
+# ------------------------------------------------------------------ #
+# 화면 표시 전용 실시간 스트리밍 (탐지 결과를 로그/알람으로 연결하는 작업은
+# 여전히 Streamlit 쪽(services/playback.py)이 독립적으로 수행합니다 — 이
+# 엔드포인트는 오직 "부드러운 화면 표시"만을 위한 것입니다.)
+# ------------------------------------------------------------------ #
+@app.get("/stream")
+def stream(path: str, fps: float = 30.0, detect_every: float = 0.3):
+    """업로드된 영상 파일 경로를 받아, 실시간 속도로 프레임을 읽고 박스를
+    그려 MJPEG(multipart) 스트림으로 계속 전송합니다. 브라우저의 <img> 태그가
+    이 주소를 가리키기만 하면, Streamlit의 rerun 주기와 무관하게 자체적으로
+    프레임을 이어받아 표시하므로 훨씬 매끄럽습니다."""
+    video_path = unquote(path)
+
+    def _generate():
+        cap = cv2.VideoCapture(video_path)
+        if not cap.isOpened():
+            return
+        video_fps = cap.get(cv2.CAP_PROP_FPS) or fps
+        frame_interval = 1.0 / video_fps
+
+        state = {"dets": [], "busy": False}
+        last_detect_time = 0.0
+
+        def _detect_async(pil_img):
+            """추론을 별도 스레드에서 수행 — 프레임 전송 루프는 이 결과를
+            기다리지 않고 계속 진행되므로, 추론이 아무리 오래 걸려도
+            프레임 전송 자체는 끊기지 않습니다."""
+            try:
+                with model_lock:
+                    results = model(pil_img, conf=CONF_THRESHOLD, iou=NMS_THRESHOLD, verbose=False)[0]
+                state["dets"] = [
+                    {
+                        "class_name": model.names[int(box.cls[0])],
+                        "confidence": round(float(box.conf[0]), 4),
+                        "box": {
+                            "x1": float(box.xyxy[0][0]), "y1": float(box.xyxy[0][1]),
+                            "x2": float(box.xyxy[0][2]), "y2": float(box.xyxy[0][3]),
+                        },
+                    }
+                    for box in results.boxes
+                ]
+            except Exception as e:
+                print(f"[stream] 추론 실패: {e}")  # 콘솔에서 바로 확인 가능하도록                
+            finally:
+                state["busy"] = False
+
+        try:
+            while True:
+                start = time.perf_counter()
+                ret, frame = cap.read()
+                if not ret:
+                    cap.set(cv2.CAP_PROP_POS_FRAMES, 0)  # 끝까지 재생되면 처음으로 되돌아가 반복
+                    continue
+
+                pil_img = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
+
+                now = time.perf_counter()
+                if now - last_detect_time >= detect_every and not state["busy"]:
+                    last_detect_time = now
+                    state["busy"] = True
+                    threading.Thread(target=_detect_async, args=(pil_img.copy(),), daemon=True).start()
+
+                annotated = draw_boxes(pil_img, state["dets"])
+                buf = io.BytesIO()
+                annotated.save(buf, format="JPEG", quality=80)
+
+                yield (b"--frame\r\nContent-Type: image/jpeg\r\n\r\n" + buf.getvalue() + b"\r\n")
+
+                elapsed = time.perf_counter() - start
+                time.sleep(max(0.0, frame_interval - elapsed))
+        finally:
+            cap.release()
+
+    return StreamingResponse(_generate(), media_type="multipart/x-mixed-replace; boundary=frame")

@@ -9,16 +9,10 @@ from datetime import datetime
 import streamlit as st
 
 from utils.formatters import fmt_dt
-
-# 버튼 라벨(예: "관리자 로그")이 컬럼 폭보다 길 때 두 줄로 줄바꿈되는 것을 막는 CSS.
-# Streamlit이 버튼 라벨을 내부적으로 <p> 태그로 렌더링하는 구조를 이용해 nowrap을 강제합니다.
-_BUTTON_NOWRAP_CSS = """
-<style>
-div[data-testid="stButton"] > button p {
-    white-space: nowrap;
-}
-</style>
-"""
+from ui.styles import (
+    BUTTON_NOWRAP_CSS, BRAND_TITLE_STYLE, STATUS_BADGE_STYLE,
+    CLOCK_LABEL_STYLE, CLOCK_PERIOD_STYLE, CLOCK_TIME_STYLE,
+)
 
 
 def _render_status_badge() -> None:
@@ -29,14 +23,14 @@ def _render_status_badge() -> None:
     db_label = "🟢 RDS 연결됨" if ss.get("DB_ENABLED") else "🟡 메모리 모드"
     s3_label = "🟢 S3 연결됨" if ss.get("S3_ENABLED") else "🟡 S3 미연결"
     st.markdown(
-        f"<div style='text-align:right; font-size:0.85rem; color:gray; white-space:nowrap;'>"
-        f"{db_label} · {s3_label}</div>",
+        f"<div style='{STATUS_BADGE_STYLE}'>{db_label} · {s3_label}</div>",
         unsafe_allow_html=True,
     )
     # RDS 갱신/저장 실패 시 services/alerts.py 등에서 이 키에 메시지를 남겨둡니다.
     # 몇 초 뒤 사라지는 토스트가 아니라 배너(st.error)로 표시하여 놓칠 위험을 줄입니다.
     if ss.get("db_write_warning"):
         st.error(f"⚠️ {ss.pop('db_write_warning')}")
+
 
 def _render_recent_alerts() -> None:
     """최근 사람 탐지 중 가장 마지막 건을 라벨로 보여주고, 클릭해서 펼치면
@@ -59,20 +53,21 @@ def _render_recent_alerts() -> None:
         for a in recent_logs:
             st.caption(f"{fmt_dt(a)} · {a['camera']} · {a['class_name']}")
 
+
 @st.fragment(run_every=1)
 def _render_clock() -> None:
-    """1초마다 독립적으로 재실행되는 실시간 시계 컴포넌트입니다 (fragment 덕분에 전체
-    페이지가 아니라 이 부분만 갱신되어 다른 UI에 영향을 주지 않습니다). 항상 표시됩니다."""
+    """1초마다 독립적으로 재실행되는 실시간 시계 컴포넌트입니다. fragment
+    덕분에 전체 페이지가 아니라 이 부분만 갱신되어 다른 UI에 영향을 주지
+    않습니다. 시계 옆에는 최근 탐지 배너도 함께 그립니다."""
     now = datetime.now()
-    # 라벨("현재 시각")은 작게, 오전/오후는 중간 크기, 실제 시:분:초는 크고 굵게 표시하여 시각적 강조 차등을 둠
     clock_col, alert_col = st.columns([1, 2])
     with clock_col:
         st.markdown(
             f"<div style='text-align:left; line-height:2.2;'>"
-            f"<span style='font-size:0.9rem; color:gray;'>현재 시각:</span> &nbsp;"
-            f"<span style='font-size:1.2rem; font-weight:500;'>"
+            f"<span style='{CLOCK_LABEL_STYLE}'>현재 시각:</span> &nbsp;"
+            f"<span style='{CLOCK_PERIOD_STYLE}'>"
             f"{'오전' if now.hour < 12 else '오후'}</span> "
-            f"<span style='font-size:1.6rem; font-weight:600;'>"
+            f"<span style='{CLOCK_TIME_STYLE}'>"
             f"{now.strftime('%I:%M:%S')}"
             f"</span>"
             f"</div>",
@@ -80,6 +75,7 @@ def _render_clock() -> None:
         )
     with alert_col:
         _render_recent_alerts()
+
 
 def render_topnav() -> None:
     """상단 네비게이션 전체를 렌더링합니다 — 브랜드명, 페이지 전환 버튼 3개,
@@ -89,13 +85,12 @@ def render_topnav() -> None:
     """
     ss = st.session_state
     ss.setdefault("current_page", "관제 대시보드")
-    st.markdown(_BUTTON_NOWRAP_CSS, unsafe_allow_html=True)
+    st.markdown(BUTTON_NOWRAP_CSS, unsafe_allow_html=True)
 
     # 1행: 브랜드명 — 버튼 줄과 분리된 별도의 줄에 항상 고정 노출.
     # 관제 시스템 화면에서 "지금 어떤 시스템을 보고 있는지"는 페이지 이동과 무관하게 항상 보여야 함.
     st.markdown(
-        "<div style='font-size:1.3rem; font-weight:700; margin-bottom:0.8rem;'>"
-        "GOP 통합 감시 시스템</div>",
+        f"<div style='{BRAND_TITLE_STYLE}'>GOP 통합 감시 시스템</div>",
         unsafe_allow_html=True,
     )
 
@@ -121,6 +116,7 @@ def render_topnav() -> None:
     with status_col:
         _render_status_badge()
 
-    # 3행: 실시간 시계 — 표시 여부는 _render_clock() 내부에서 자체적으로 판단 (위 docstring 참고)
+    # 3행: 실시간 시계 (항상 표시) + 최근 탐지 배너
     _render_clock()
     st.divider()
+

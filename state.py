@@ -18,7 +18,6 @@ def init_session_state() -> None:
 
     # ── 주요 데이터 컨테이너 ──
     ss.setdefault("detection_logs", [])   # 전체 탐지 이력 (로그 페이지에서 사용 · RDS 연결 시 과거 이력까지 포함)
-    ss.setdefault("dashboard_alerts", []) # 이번 세션에서 발생한 사람 탐지만 담는 경보 패널 전용 리스트 (재시작 시 초기화, RDS와 무관)
     ss.setdefault("next_alert_id", 1)     # 메모리 모드(DB 미연결)일 때 새 로그에 부여할 로컬 ID 카운터
 
     # ── 데모 및 시뮬레이션 설정 ──

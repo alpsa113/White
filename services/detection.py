@@ -4,7 +4,7 @@ services/detection.py — 탐지 추론 호출 및 시각화 로직
 백엔드 API 호출(run_detection), 데모용 무작위 탐지 생성(simulate_detections),
 바운딩 박스 오버레이(draw_boxes), 사람 클래스 판별(is_person)을 담당합니다.
 Streamlit 렌더링(st.markdown 등)은 포함하지 않는 순수 로직 계층이며,
-services/video_tracking.py와 ui/camera_card.py에서 호출되어 사용됩니다.
+services/tracking.py·playback.py와 ui/camera/card.py에서 호출되어 사용됩니다.
 """
 import io
 import random

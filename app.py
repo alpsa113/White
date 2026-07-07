@@ -46,4 +46,4 @@ elif page_selection == "설정":
 # 탐지·로그 생성·알림(토스트/소리)은 그대로 계속됩니다.
 active_cams = [cam for cam in cameras if ss.get(f"playing_{cam['id']}")]
 if active_cams:
-    run_playback_loop(active_cams, video_slots, {})
+    run_playback_loop(active_cams, video_slots)

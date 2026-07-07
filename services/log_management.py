@@ -62,7 +62,7 @@ def save_log_edits(df_edit_orig: pd.DataFrame, edited_df: pd.DataFrame) -> dict:
         changed = any(
             str(row[col]) != str(orig[col])
             for col in [
-                "탐지 일시", "카메라", "입력 소스",
+                "탐지 일시", "카메라",
                 "클래스명", "신뢰도 (%)", "상태", "비고",
             ]
         )
@@ -75,7 +75,6 @@ def save_log_edits(df_edit_orig: pd.DataFrame, edited_df: pd.DataFrame) -> dict:
                 continue
             a["created_at"] = str(row["탐지 일시"])
             a["camera"]     = str(row["카메라"])
-            a["input_type"] = str(row["입력 소스"])
             a["class_name"] = str(row["클래스명"])
             a["score"]      = float(row["신뢰도 (%)"]) / 100.0
             a["status"]     = str(row["상태"])

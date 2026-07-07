@@ -15,9 +15,16 @@ python-multipart
 
 # ── 프론트엔드 (Streamlit) ──
 streamlit
-streamlit-cropper
 pandas
+numpy
 opencv-python
+
+# ── 탐지 전후 클립(mp4) 인코딩 ──
+# imageio-ffmpeg는 플랫폼별 ffmpeg 실행파일을 패키지 안에 내장하고 있어
+# 시스템에 별도로 ffmpeg를 설치할 필요가 없습니다. cv2.VideoWriter는 브라우저가
+# 재생 못 하는 구형 코덱(MPEG-4 Part 2)으로 인코딩되어 이 조합을 대신 씁니다.
+imageio
+imageio-ffmpeg
 
 # ── 공통 (백엔드·프론트엔드 양쪽에서 사용) ──
 pillow

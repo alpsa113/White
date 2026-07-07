@@ -9,9 +9,9 @@ from ui.camera.card import render_camera_card
 SPOTLIGHT_HEIGHT_PX = 700
 
 def render_camera_spotlight(cameras: list[dict], focused_name: str, video_slots: dict) -> None:
-    """focused_name에 해당하는 카메라를 좌측에 크게, 나머지 카메라는 우측에
-    고정 높이 스크롤 영역 안에 작은 미니 그리드로 나열합니다. focused_name을 찾지 못하면(그리드 축소 등으로 사라진
-    경우) 좌측을 비워두고 나머지만 보여줍니다."""
+    """focused_name에 해당하는 카메라를 좌측에 크게, 나머지 카메라는 우측의
+    고정 높이 스크롤 영역 안에 작은 미니 그리드로 나열합니다. focused_name을
+    찾지 못하면(그리드 축소 등으로 사라진 경우) 좌측을 비워두고 나머지만 보여줍니다."""
     focused = next((c for c in cameras if c["name"] == focused_name), None)
     others = [c for c in cameras if c["name"] != focused_name]
 

@@ -11,7 +11,7 @@ import streamlit as st
 
 import s3_storage as s3
 from services.log_management import save_log_edits
-from utils.formatters import fmt_dt, fmt_src, fmt_bbox
+from utils.formatters import fmt_dt
 
 
 def _build_view_df(sorted_logs: list[dict]) -> pd.DataFrame:
@@ -67,10 +67,8 @@ def render_view_tab(sorted_logs: list[dict]) -> None:
 
         # ID로 직접 로그를 찾으므로, 리스트 순서가 바뀌어도 항상 올바른 레코드를 가리킴
         sel_log = next((a for a in ss.detection_logs if a.get("id") == sel_log_id), None)
-        _df_match = df[df["탐지 ID"] == sel_log_id]
-        sel_row = _df_match.iloc[0] if not _df_match.empty else None
 
-        if sel_log is None or sel_row is None:
+        if sel_log is None:
             st.warning("선택된 로그를 찾을 수 없습니다.")
             ss["selected_log_id"] = None  # 삭제 등으로 무효해진 선택은 초기화
             return
