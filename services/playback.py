@@ -132,6 +132,9 @@ def run_playback_loop(active_cams: list[dict], video_slots: dict, progress_slots
                 ss[f"last_dets_{cid}"] = dets
                 if is_new_alert:
                     need_ui_refresh = True
+                    # 사람이 새로 탐지되면 그 카메라로 자동 전환
+                    # 위젯이 그려지기 전에 반영되도록 예약 방식(_pending_selected_cam)을 재사용
+                    ss["_pending_selected_cam"] = cam["name"]
             else:
                 dets = ss.get(f"last_dets_{cid}", [])
 

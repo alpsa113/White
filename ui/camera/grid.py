@@ -19,11 +19,3 @@ def render_camera_grid(cameras: list[dict], video_slots: dict, cols_per_row: int
         for col, cam in zip(cols, row_cams):
             with col:
                 render_camera_card(cam, video_slots)
-
-
-def render_camera_focus(cameras: list[dict], cam_name: str, video_slots: dict) -> None:
-    """특정 카메라 하나만 전체 너비로 확대 표시합니다 (대시보드 구역 선택 드롭다운에서
-    '전체 구역'이 아닌 개별 카메라를 골랐을 때 호출됨)."""
-    cam = next((c for c in cameras if c["name"] == cam_name), None)
-    if cam:
-        render_camera_card(cam, video_slots)

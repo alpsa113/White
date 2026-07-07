@@ -20,7 +20,6 @@ def init_session_state() -> None:
     ss.setdefault("detection_logs", [])   # 전체 탐지 이력 (로그 페이지에서 사용 · RDS 연결 시 과거 이력까지 포함)
     ss.setdefault("dashboard_alerts", []) # 이번 세션에서 발생한 사람 탐지만 담는 경보 패널 전용 리스트 (재시작 시 초기화, RDS와 무관)
     ss.setdefault("next_alert_id", 1)     # 메모리 모드(DB 미연결)일 때 새 로그에 부여할 로컬 ID 카운터
-    ss.setdefault("popup_id", None)       # 화면 중앙에 크게 띄울 특정 로그의 ID — 값이 있으면 다음 렌더에서 팝업이 뜨고 소비됨
     ss.setdefault("popup_queue", [])      # popup_id가 비어있을 때 순서대로 꺼내 보여줄 대기 중인 로그 ID 목록
 
     # ── 데모 및 시뮬레이션 설정 ──
@@ -28,7 +27,6 @@ def init_session_state() -> None:
     ss.setdefault("person_ratio", 0.03)    # 데모 모드에서 탐지 객체가 '사람'으로 나올 확률 (0.0~1.0)
 
     # ── UI 및 알람 제어 상태 ──
-    ss.setdefault("auto_popup", True)          # 사람 탐지 시 팝업창을 자동으로 띄울지 여부
     ss.setdefault("current_page", "관제 대시보드")  # 현재 선택된 페이지 (상단 네비게이션 버튼으로 전환)
     ss.setdefault("last_auto_popup_time", 0)   # 마지막 자동 팝업 발생 시각 — 쿨다운 계산용
     ss.setdefault("selected_cam", "전체 구역")  # "전체 구역" → 그리드 보기 / 특정 카메라명 → 집중 보기

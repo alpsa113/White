@@ -104,14 +104,7 @@ def create_detection_alert(cam_name: str, class_name: str, conf: float, frames: 
     # 경보 패널은 이번 세션에서 탐지된 사람만 표시 — RDS 과거 이력과는 별개로 관리
     if record.get("show_on_dashboard"):
         ss.dashboard_alerts.append(record)
-
-    # 사람 탐지 자동 팝업 — 탐지된 사람은 모두 대기열에 쌓여 순서대로 팝업으로 표시됩니다.
-    # (같은 사람이 계속 화면에 있는 경우는 update_detection_alert()가 처리하므로 여기서
-    #  중복 추가될 일은 없습니다 — 이 블록은 '새로운' 사람이 탐지됐을 때만 호출됩니다.)
-    if show_on_dash and ss.get("auto_popup", True):
-        ss.setdefault("popup_queue", [])
-        ss["popup_queue"].append(aid)
-
+        
     return aid
 
 
