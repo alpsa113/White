@@ -7,8 +7,6 @@ ui/camera/toolbar.py — 대시보드 헤더의 카메라 제어 위젯 모음
 import streamlit as st
 
 from config import MAX_CAMERAS
-from ui.camera.reorder import render_camera_reorder
-
 
 def consume_pending_camera_switch() -> None:
     """예약된 구역 전환 요청을 드롭다운 위젯이 그려지기 전에 반영합니다."""
@@ -47,7 +45,7 @@ def _sync_selected_cam() -> None:
     st.session_state["selected_cam"] = st.session_state["_selected_cam_widget"]
 
 
-def render_dashboard_header(cameras: list[dict], valid_options: list[str]) -> bool:
+def render_dashboard_header(valid_options: list[str]) -> bool:
     """대시보드 상단 헤더(제목 + 구역 선택 + 카메라 개수 + 순서 변경)를 렌더링하고,
     현재 '전체 구역'(그리드) 모드인지 여부를 반환합니다."""
     ss = st.session_state
@@ -57,13 +55,13 @@ def render_dashboard_header(cameras: list[dict], valid_options: list[str]) -> bo
     # 특정 카메라를 볼 때는 이 두 컬럼 자체가 없어야, 구역 선택 드롭다운이
     # 빈 공간 없이 화면 맨 오른쪽 끝에 자연스럽게 붙습니다.
     if is_grid_mode:
-        h1, h2, h3, h4 = st.columns([2.8, 1.2, 1.5, 1.1])
+        h1, h2, h3 = st.columns([2.8, 1.2, 1.5])
     else:
         h1, h2 = st.columns([2.8, 1.2])
-        h3 = h4 = None
+        h3 = None
 
     with h1:
-        st.markdown("🔴 **라이브 카메라 피드**")
+        st.markdown("**라이브 카메라 피드**")
     with h2:
         current = ss.get("selected_cam", "전체 구역")
         st.selectbox(
@@ -77,12 +75,5 @@ def render_dashboard_header(cameras: list[dict], valid_options: list[str]) -> bo
     if is_grid_mode:
         with h3:
             _render_grid_count_selector()
-        with h4:
-            st.container(height=12, border=False)
-            with st.popover("🔀 카메라 순서 변경"):
-                new_order = render_camera_reorder(cameras)
-                if new_order is not None:
-                    ss["camera_order"] = new_order
-                    st.rerun()
 
     return is_grid_mode

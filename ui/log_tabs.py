@@ -84,7 +84,7 @@ def render_view_tab(sorted_logs: list[dict]) -> None:
             f"Score: **{float(sel_log.get('score', sel_log.get('confidence', 0))):.1%}**",
             unsafe_allow_html=True
         )
-        st.caption(f"🕒 {fmt_dt(sel_log)}")
+        st.caption(f"탐지시각: {fmt_dt(sel_log)}")
         st.divider()
 
         # 이미지 로딩 우선순위: 메모리 스냅샷(이번 세션 탐지) → S3 다운로드(과거 이력)
@@ -109,7 +109,7 @@ def render_manage_tab(sorted_logs: list[dict]) -> None:
     st.caption(
         "셀을 직접 클릭하여 수정할 수 있습니다. "
         "삭제할 행은 왼쪽 체크박스로 선택한 뒤 우상단 **🗑️ 휴지통** 버튼을 누르세요. "
-        "**💾 변경사항 저장** 버튼을 누르면 수정·삭제가 RDS에 즉시 반영됩니다."
+        "**변경사항 저장** 버튼을 누르면 수정·삭제가 RDS에 즉시 반영됩니다."
     )
 
     # ── 편집용 DataFrame 빌드 ──
@@ -172,7 +172,7 @@ def render_manage_tab(sorted_logs: list[dict]) -> None:
     btn_col, _ = st.columns([2, 8])
     with btn_col:
         save_clicked = st.button(
-            "💾 변경사항 저장", type="primary", use_container_width=True
+            "변경사항 저장", type="primary", use_container_width=True
         )
 
     if not save_clicked:

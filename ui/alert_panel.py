@@ -32,8 +32,8 @@ def render_alert_panel() -> None:
     for alert in reversed(dashboard_alerts):
         with st.container(border=True):
             st.markdown(
-                f"🚨 **{alert['class_name']}** ({alert['confidence']:.0%})<br>"
-                f"📍 {alert['camera']}",
+                f"**{alert['class_name']}** ({alert['confidence']:.0%})<br>"
+                f"{alert['camera']}",
                 unsafe_allow_html=True
             )
             # 비고 입력 — on_change 콜백에서 메모리 갱신 + DB 동기화까지 즉시 처리
@@ -58,6 +58,6 @@ def render_alert_panel() -> None:
             # 오탐/경보 처리가 된 건은 상태를 카드에 바로 표시하여 이미 검토했는지 한눈에 확인 가능
             if alert["status"] != "대기":
                 st.caption(f"✓ 처리상태: **{alert['status']}**")
-            if st.button("🔍 탐지 화면", key=f"view_{alert['id']}", use_container_width=True):
+            if st.button("탐지 화면", key=f"view_{alert['id']}", use_container_width=True):
                 open_popup(alert["id"])
                 st.rerun()

@@ -33,7 +33,7 @@ def render() -> None:
     )
 
     # 조회(읽기 전용)와 편집(수정/삭제)을 탭으로 분리하여, 실수로 값을 바꾸는 것을 방지
-    tab_view, tab_manage = st.tabs(["🔍 로그 조회 및 이미지", "✏️ 로그 편집 및 삭제"])
+    tab_view, tab_manage = st.tabs(["로그 조회 및 이미지", "로그 편집 및 삭제"])
 
     with tab_view:
         render_view_tab(sorted_logs)

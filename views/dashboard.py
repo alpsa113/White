@@ -36,7 +36,7 @@ def render() -> None:
     left_col, right_col = st.columns([6, 1])
 
     with left_col:
-        is_grid_mode = render_dashboard_header(cameras, valid_options)
+        is_grid_mode = render_dashboard_header(valid_options)
         if is_grid_mode:
             # 정사각형에 가깝게 자동 계산된 열 수로 그리드 렌더링
             render_camera_grid(cameras, video_slots, cols_per_row=compute_grid_columns(len(cameras)))

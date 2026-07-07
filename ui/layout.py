@@ -70,7 +70,7 @@ def render_topnav() -> None:
     # 관제 시스템 화면에서 "지금 어떤 시스템을 보고 있는지"는 페이지 이동과 무관하게 항상 보여야 함.
     st.markdown(
         "<div style='font-size:1.3rem; font-weight:700; margin-bottom:0.8rem;'>"
-        "📹 GOP 통합 감시 시스템</div>",
+        "GOP 통합 감시 시스템</div>",
         unsafe_allow_html=True,
     )
 
@@ -79,17 +79,17 @@ def render_topnav() -> None:
         st.columns([1.4, 1.4, 1.1, 4.3, 1.8], vertical_alignment="center")
     with tab1_col:
         # 현재 페이지면 primary(강조색), 아니면 secondary(기본색) 버튼으로 현재 위치를 표시
-        if st.button("📡 실시간 감시", use_container_width=True,
+        if st.button("실시간 감시", use_container_width=True,
                      type="primary" if ss.current_page == "관제 대시보드" else "secondary"):
             ss.current_page = "관제 대시보드"
             st.rerun()  # 클릭 즉시 페이지 전환이 반영되도록 강제 재실행
     with tab2_col:
-        if st.button("🗂️ 관리자 로그", use_container_width=True,
+        if st.button("관리자 로그", use_container_width=True,
                      type="primary" if ss.current_page == "탐지 데이터 로그" else "secondary"):
             ss.current_page = "탐지 데이터 로그"
             st.rerun()
     with tab3_col:
-        if st.button("⚙️ 설정", use_container_width=True,
+        if st.button("설정", use_container_width=True,
                      type="primary" if ss.current_page == "설정" else "secondary"):
             ss.current_page = "설정"
             st.rerun()

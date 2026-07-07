@@ -16,7 +16,7 @@ def open_popup(aid: int) -> None:
     st.session_state["popup_id"] = aid
     st.session_state["_popup_opened_at"] = time.time()
 
-@st.dialog("🚨 사람 탐지 상세", width="small")
+@st.dialog("사람 탐지 상세", width="small")
 def show_person_dialog(alert: dict) -> None:
     """특정 탐지 로그의 스냅샷 이미지와 상세 정보를 화면 중앙에 크게 띄워주는 다이얼로그(팝업)입니다.
     경보 패널의 '탐지 화면' 버튼 클릭 또는 신규 사람 탐지 시 자동으로 트리거됩니다."""

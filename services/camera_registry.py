@@ -19,21 +19,8 @@ def get_active_cameras() -> list[dict]:
     ss = st.session_state
     total = max(1, min(ss.get("grid_count", 4), MAX_CAMERAS))
     cameras = build_camera_list(total)
-    cameras = _apply_saved_order(cameras)
     _cleanup_removed_cameras(cameras)
     return cameras
-
-
-def _apply_saved_order(cameras: list[dict]) -> list[dict]:
-    """session_state.camera_order에 저장된 순서대로 cameras를 재배열합니다."""
-    ss = st.session_state
-    by_id = {c["id"]: c for c in cameras}
-    order = [cid for cid in ss.get("camera_order", []) if cid in by_id]
-    for c in cameras:
-        if c["id"] not in order:
-            order.append(c["id"])  # 순서 목록에 없던 새 카메라는 맨 뒤에 추가
-    ss["camera_order"] = order
-    return [by_id[cid] for cid in order]
 
 
 def _cleanup_removed_cameras(cameras: list[dict]) -> None:
