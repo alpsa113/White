@@ -9,6 +9,9 @@ import os
 import sys
 from pathlib import Path
 
+# matplotlib/fontconfig는 PR curve와 confusion matrix 저장 시 폰트 캐시를 만든다.
+# Colab, 서버, Codex 샌드박스처럼 홈 디렉토리 캐시 권한이 제한된 환경에서도
+# 경고 없이 동작하도록 쓰기 가능한 임시 디렉토리를 기본값으로 사용한다.
 os.environ.setdefault("MPLCONFIGDIR", "/tmp/matplotlib")
 os.environ.setdefault("XDG_CACHE_HOME", "/tmp")
 os.environ.setdefault("NO_ALBUMENTATIONS_UPDATE", "1")
@@ -34,6 +37,14 @@ from training.trainer import Trainer
 
 
 CLASS_NAMES = ["person", "boar", "deer", "non_target"]
+COLAB_ARTIFACT_ROOT = Path("/content/drive/MyDrive/dual_yolo")
+
+
+def default_output_dir() -> str:
+    """Colab Drive가 마운트되어 있으면 Drive metrics 경로를 기본값으로 사용."""
+    if COLAB_ARTIFACT_ROOT.exists():
+        return str(COLAB_ARTIFACT_ROOT / "metrics")
+    return "outputs/metrics"
 
 
 def load_yaml(path: str | Path) -> dict:
@@ -327,7 +338,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--phase", type=int, choices=[1, 2, 3], required=True)
     parser.add_argument("--model-cfg", default="configs/model.yaml")
     parser.add_argument("--phase-cfg", default="configs/phases.yaml")
-    parser.add_argument("--output-dir", default="outputs/metrics")
+    parser.add_argument(
+        "--output-dir",
+        default=None,
+        help="평가 산출물 출력 디렉토리. Colab Drive가 있으면 기본값은 /content/drive/MyDrive/dual_yolo/metrics",
+    )
     parser.add_argument("--prefix", default=None)
     parser.add_argument("--batch", type=int, default=8)
     parser.add_argument("--num-workers", type=int, default=0)
@@ -343,7 +358,10 @@ def parse_args() -> argparse.Namespace:
 
 
 def main() -> None:
-    evaluate(parse_args())
+    args = parse_args()
+    if args.output_dir is None:
+        args.output_dir = default_output_dir()
+    evaluate(args)
 
 
 if __name__ == "__main__":
