@@ -8,6 +8,8 @@ from datetime import datetime
 
 import streamlit as st
 
+from utils.formatters import fmt_dt
+
 # 버튼 라벨(예: "관리자 로그")이 컬럼 폭보다 길 때 두 줄로 줄바꿈되는 것을 막는 CSS.
 # Streamlit이 버튼 라벨을 내부적으로 <p> 태그로 렌더링하는 구조를 이용해 nowrap을 강제합니다.
 _BUTTON_NOWRAP_CSS = """
@@ -36,6 +38,26 @@ def _render_status_badge() -> None:
     if ss.get("db_write_warning"):
         st.error(f"⚠️ {ss.pop('db_write_warning')}")
 
+def _render_recent_alerts() -> None:
+    """최근 사람 탐지 중 가장 마지막 건을 라벨로 보여주고, 클릭해서 펼치면
+    최근 목록 전체를 보여줍니다. 탐지 일시 등은 detection_logs에서 그대로
+    가져와 표시할 뿐, 별도로 시각을 다시 계산하지 않습니다."""
+    ss = st.session_state
+    recent_ids = list(ss.get("recent_person_alert_ids", []))
+    if not recent_ids:
+        return
+
+    logs_by_id = {a["id"]: a for a in ss.detection_logs}
+    recent_logs = [logs_by_id[aid] for aid in reversed(recent_ids) if aid in logs_by_id]
+    if not recent_logs:
+        return
+
+    latest = recent_logs[0]
+    label = f"최근 탐지: {latest['camera']} · {latest['class_name']} · {fmt_dt(latest)[-8:]}"
+
+    with st.expander(label, expanded=False):
+        for a in recent_logs:
+            st.caption(f"{fmt_dt(a)} · {a['camera']} · {a['class_name']}")
 
 @st.fragment(run_every=1)
 def _render_clock() -> None:
@@ -43,18 +65,21 @@ def _render_clock() -> None:
     페이지가 아니라 이 부분만 갱신되어 다른 UI에 영향을 주지 않습니다). 항상 표시됩니다."""
     now = datetime.now()
     # 라벨("현재 시각")은 작게, 오전/오후는 중간 크기, 실제 시:분:초는 크고 굵게 표시하여 시각적 강조 차등을 둠
-    st.markdown(
-        f"<div style='text-align:left; line-height:2.2;'>"
-        f"<span style='font-size:0.9rem; color:gray;'>현재 시각:</span> &nbsp;"
-        f"<span style='font-size:1.2rem; font-weight:500;'>"
-        f"{'오전' if now.hour < 12 else '오후'}</span> "
-        f"<span style='font-size:1.6rem; font-weight:600;'>"
-        f"{now.strftime('%I:%M:%S')}"
-        f"</span>"
-        f"</div>",
-        unsafe_allow_html=True,
-    )
-
+    clock_col, alert_col = st.columns([1, 2])
+    with clock_col:
+        st.markdown(
+            f"<div style='text-align:left; line-height:2.2;'>"
+            f"<span style='font-size:0.9rem; color:gray;'>현재 시각:</span> &nbsp;"
+            f"<span style='font-size:1.2rem; font-weight:500;'>"
+            f"{'오전' if now.hour < 12 else '오후'}</span> "
+            f"<span style='font-size:1.6rem; font-weight:600;'>"
+            f"{now.strftime('%I:%M:%S')}"
+            f"</span>"
+            f"</div>",
+            unsafe_allow_html=True,
+        )
+    with alert_col:
+        _render_recent_alerts()
 
 def render_topnav() -> None:
     """상단 네비게이션 전체를 렌더링합니다 — 브랜드명, 페이지 전환 버튼 3개,

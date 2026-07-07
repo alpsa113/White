@@ -13,6 +13,8 @@ import streamlit as st
 from state import init_session_state
 from ui.layout import render_topnav
 from views import dashboard, logs, settings
+from services.camera_registry import get_active_cameras
+from services.playback import run_playback_loop
 
 # wide 레이아웃 사용 — 카메라 그리드와 로그 표가 넓은 화면을 최대한 활용하도록 설정
 st.set_page_config(page_title="GOP 통합 감시 시스템", layout="wide")
@@ -24,12 +26,24 @@ init_session_state()
 # → 어떤 페이지를 보고 있든 항상 동일하게 상단에 표시됩니다.
 render_topnav()
 
-page_selection = st.session_state.current_page
+ss = st.session_state
+page_selection = ss.current_page
+
+# 카메라 목록/재생 상태는 현재 보고 있는 페이지와 무관하게 항상 계산합니다.
+# 관제 시스템 특성상, 로그/설정 페이지에 있어도 탐지는 끊기지 않아야 합니다.
+cameras = get_active_cameras()
+video_slots = {}
 
 # 현재 선택된 페이지의 render()만 호출 — 나머지 페이지 코드는 실행되지 않음
 if page_selection == "관제 대시보드":
-    dashboard.render()
+    video_slots = dashboard.render(cameras)
 elif page_selection == "탐지 데이터 로그":
     logs.render()
 elif page_selection == "설정":
     settings.render()
+
+# 대시보드가 아닌 페이지에 있으면 video_slots가 비어있어 화면 갱신만 건너뛰고,
+# 탐지·로그 생성·알림(토스트/소리)은 그대로 계속됩니다.
+active_cams = [cam for cam in cameras if ss.get(f"playing_{cam['id']}")]
+if active_cams:
+    run_playback_loop(active_cams, video_slots, {})

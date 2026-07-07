@@ -50,10 +50,6 @@ def render_camera_card(cam: dict, video_slots: dict) -> None:
 
         if uploaded is not None:
             _handle_upload(cam, uploaded)
-        elif ss.get(f"fp_{cid}") is not None:
-            # file_uploader 자체의 X로 파일이 제거된 경우 — 업로드/재생 상태를 정리
-            reset_cam_state(cid)
-            st.rerun()
 
         is_grid = ss.get("selected_cam") == "전체 구역"
         image_slot = _render_image_area(cam, is_grid, video_slots)
@@ -104,7 +100,7 @@ def _handle_upload(cam: dict, uploaded) -> None:
         st.rerun()  # 재생 상태를 즉시 반영 → 이후 카드가 스스로 재생을 이어받음
     else:
         image = Image.open(uploaded).convert("RGB")
-        dets, _ = process_frame(cam, image, "이미지", single=True)
+        dets, _, _ = process_frame(cam, image, "이미지", single=True)
         ss[f"result_{cid}"] = draw_boxes(image, dets)
         st.rerun()
 

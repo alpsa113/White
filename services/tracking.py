@@ -13,18 +13,30 @@ import time
 
 import streamlit as st
 from PIL import Image
+from collections import deque
 
 from config import PERSON_GAP_TOLERANCE, ANIMAL_TOAST_COOLDOWN, FALLBACK_CONF_THRESH, FALLBACK_NMS_THRESH
 from services.detection import run_detection, draw_boxes, is_person
+from services.audio_alert import play_alert_sound
 from services.alerts import create_detection_alert, update_detection_alert
 
+RECENT_ALERTS_MAX = 5  # 상단 배너에 보관할 최근 사람 탐지 개수
+
+def _record_recent_alert(aid: int) -> None:
+    """최근 사람 탐지 ID를 최대 RECENT_ALERTS_MAX개까지 보관합니다.
+    탐지 일시/카메라/클래스 등 상세 정보는 이미 ss.detection_logs에 있으므로
+    여기서는 ID만 기록하고, 표시할 때 로그에서 그대로 조회해 씁니다."""
+    ss = st.session_state
+    recent = ss.setdefault("recent_person_alert_ids", deque(maxlen=RECENT_ALERTS_MAX))
+    recent.append(aid)
 
 def process_frame(cam: dict, image: Image.Image, source: str, single: bool, timestamp_ms: float = 0.0):
     """단일 이미지나 영상 프레임 1장을 분석하고, 연속 등장/사라짐(트래킹) 상태를 계산하여
     적절한 알림 액션(신규 알람 생성 / 기존 알람 갱신 / 동물 토스트)을 수행합니다.
 
     Returns:
-        tuple: (탐지 결과 리스트, 이번 프레임에서 신규 알람이 발생했는지 여부)
+        tuple: (탐지 결과 리스트, 이번 프레임에서 신규 알람이 발생했는지 여부,
+                이번 호출에서 새로 생성된 로그 ID 목록 — 탐지 전후 클립 녹화 대상)
     """
     cid = cam["id"]
     sname = cam["name"]
@@ -43,19 +55,24 @@ def process_frame(cam: dict, image: Image.Image, source: str, single: bool, time
     is_new_alert = False
     annotated = None
 
+    new_alert_ids: list[int] = []  # 이번 호출에서 새로 생성된 로그 ID (클립 녹화 대상)
+
     # ── 단일 이미지 처리: 트래킹 없이 탐지된 모든 객체를 즉시 로그에 기록 ──
     if single:
         annotated = draw_boxes(image, dets)
 
         for person in persons:
-            create_detection_alert(sname, person["class_name"],
-                                   person["confidence"],
-                                   1, source, annotated, True,
-                                   box=person["box"],
-                                   timestamp_ms=timestamp_ms,
-                                   latency_ms=latency_ms,
-                                   conf_thresh=conf_thresh,
-                                   nms_thresh=nms_thresh)
+            aid = create_detection_alert(sname, person["class_name"],
+                                         person["confidence"],
+                                         1, source, annotated, True,
+                                         box=person["box"],
+                                         timestamp_ms=timestamp_ms,
+                                         latency_ms=latency_ms,
+                                         conf_thresh=conf_thresh,
+                                         nms_thresh=nms_thresh)
+            new_alert_ids.append(aid)
+            play_alert_sound()
+            _record_recent_alert(aid)
         if persons:
             is_new_alert = True
 
@@ -81,7 +98,8 @@ def process_frame(cam: dict, image: Image.Image, source: str, single: bool, time
                                                  nms_thresh=nms_thresh)
                     tracks[i] = {"id": aid, "gap": 0, "max": pconf, "frames": 1}
                     is_new_alert = True
-
+                    play_alert_sound()
+                    _record_recent_alert(aid)
                 else:
                     # 케이스 2: 이미 추적 중인 사람이 계속 탐지됨 → 기존 로그만 갱신 (신규 알람 없음)
                     tracks[i]["gap"] = 0
@@ -144,6 +162,7 @@ def process_frame(cam: dict, image: Image.Image, source: str, single: bool, time
                                              conf_thresh=conf_thresh,
                                              nms_thresh=nms_thresh)
                 cls_tracks[i] = {"id": aid, "gap": 0, "max": conf, "frames": 1}
+                new_alert_ids.append(aid)
             else:
                 # 이미 추적 중인 개체 → 새 로그 없이 기존 로그의 신뢰도/프레임 수만 갱신
                 cls_tracks[i]["gap"] = 0
@@ -169,4 +188,4 @@ def process_frame(cam: dict, image: Image.Image, source: str, single: bool, time
                 if animal_tracks[cls_name][i]["gap"] >= PERSON_GAP_TOLERANCE:
                     del animal_tracks[cls_name][i]
 
-    return dets, is_new_alert
+    return dets, is_new_alert, new_alert_ids

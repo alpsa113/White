@@ -1,8 +1,8 @@
 """
 ui/camera/toolbar.py — 대시보드 헤더의 카메라 제어 위젯 모음
 
-제목, 구역 선택 드롭다운, 카메라 개수 스텝퍼, 순서 변경 팝오버를 한 줄에
-조립합니다. views/dashboard.py는 render_dashboard_header() 하나만 호출하면 됩니다.
+제목, 구역 선택 드롭다운, 카메라 개수 스텝퍼를 한 줄에 조립합니다.
+views/dashboard.py는 render_dashboard_header() 하나만 호출하면 됩니다.
 """
 import streamlit as st
 
@@ -45,7 +45,7 @@ def _sync_selected_cam() -> None:
 
 
 def render_dashboard_header(valid_options: list[str]) -> bool:
-    """대시보드 상단 헤더(제목 + 구역 선택 + 카메라 개수 + 순서 변경)를 렌더링하고,
+    """대시보드 상단 헤더(제목 + 구역 선택 + 카메라 개수)를 렌더링하고,
     현재 '전체 구역'(그리드) 모드인지 여부를 반환합니다."""
     ss = st.session_state
     is_grid_mode = ss["selected_cam"] == "전체 구역"

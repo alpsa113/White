@@ -200,7 +200,8 @@ def fetch_all_logs() -> list[dict]:
         d.class_name,
         d.score,
         d.x1, d.y1, d.x2, d.y2,
-        s.uri
+        s.uri,
+        s.content_type
     FROM detections d
     JOIN inference_frames f ON d.frame_id = f.id
     JOIN inference_jobs j ON d.job_id = j.id
@@ -227,6 +228,7 @@ def fetch_all_logs() -> list[dict]:
             "x2": float(row["x2"]),
             "y2": float(row["y2"]),
             "uri": row["uri"] if pd.notna(row["uri"]) else "",
+            "content_type": row["content_type"] if pd.notna(row["content_type"]) else "image/jpeg",
         })
     return logs
 
@@ -453,3 +455,37 @@ def delete_logs(ids: list[int]) -> None:
         if model_versions_to_delete:
             mv_placeholders = ", ".join(str(m) for m in model_versions_to_delete)
             conn.execute(text(f"DELETE FROM model_versions WHERE id IN ({mv_placeholders})"))
+
+
+# ------------------------------------------------------------------ #
+# 스냅샷 → 클립 교체 (탐지 전후 영상 저장 기능용)
+# ------------------------------------------------------------------ #
+def update_snapshot_uri(aid: int, uri: str, content_type: str) -> None:
+    """탐지 ID(aid)에 연결된 job의 storage_objects(object_type='thumbnail') 레코드를
+    새 uri/content_type으로 교체합니다. 탐지 시점 스냅샷 이미지를 짧은 클립
+    영상으로 바꿔치기할 때 사용합니다. 해당 job에 아직 storage_objects 행이
+    없으면(스냅샷 업로드 자체가 실패했던 경우 등) 새로 생성합니다."""
+    engine = get_engine()
+    with engine.begin() as conn:
+        job_id = conn.execute(
+            text("SELECT job_id FROM detections WHERE id = :aid"), {"aid": int(aid)}
+        ).scalar()
+        if job_id is None:
+            return
+
+        result = conn.execute(
+            text("""
+                UPDATE storage_objects
+                SET uri = :uri, content_type = :content_type
+                WHERE job_id = :job_id AND object_type = 'thumbnail'
+            """),
+            {"uri": uri, "content_type": content_type, "job_id": job_id},
+        )
+        if result.rowcount == 0:
+            conn.execute(
+                text("""
+                    INSERT INTO storage_objects (job_id, object_type, storage_type, uri, content_type)
+                    VALUES (:job_id, 'thumbnail', 's3', :uri, :content_type)
+                """),
+                {"job_id": job_id, "uri": uri, "content_type": content_type},
+            )

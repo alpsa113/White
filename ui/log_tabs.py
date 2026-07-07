@@ -77,6 +77,7 @@ def render_view_tab(sorted_logs: list[dict]) -> None:
 
         snap = sel_log.get("snapshot")
         image_uri = sel_log.get("uri", sel_log.get("image_path", ""))
+        content_type = sel_log.get("content_type", "image/jpeg")
 
         st.markdown(
             f"**카메라: {sel_log.get('camera', '-')}** &nbsp; | &nbsp; "
@@ -87,9 +88,17 @@ def render_view_tab(sorted_logs: list[dict]) -> None:
         st.caption(f"탐지시각: {fmt_dt(sel_log)}")
         st.divider()
 
-        # 이미지 로딩 우선순위: 메모리 스냅샷(이번 세션 탐지) → S3 다운로드(과거 이력)
-        if snap is not None:
-            st.image(snap, use_container_width=True, caption="탐지 순간 캡처")
+        # 표시 우선순위: 탐지 전후 클립(영상)이 준비되어 있으면 그것을 최우선으로 재생하고,
+        # 아직 클립 인코딩 전이면(짧은 시간) 메모리 스냅샷 이미지로 대체 표시하며,
+        # 세션 재시작 등으로 메모리 스냅샷이 없으면 S3에서 이미지를 내려받습니다.
+        if content_type == "video/mp4" and ss.get("S3_ENABLED") and image_uri:
+            clip_url = s3.get_presigned_url(image_uri)
+            if clip_url:
+                st.video(clip_url)
+            else:
+                st.warning("S3 클립을 불러올 수 없습니다. 경로를 확인하세요.")
+        elif snap is not None:
+            st.image(snap, use_container_width=True, caption="탐지 순간 캡처 (클립 준비 중)")
         elif ss.get("S3_ENABLED") and image_uri:
             with st.spinner("S3 저장소에서 이미지 불러오는 중..."):
                 img_bytes = s3.download_snapshot(image_uri)

@@ -158,3 +158,36 @@ def delete_snapshots(keys: list[str]) -> None:
         )
     except (BotoCoreError, ClientError, KeyError) as e:
         st.session_state["s3_write_warning"] = f"S3 삭제 실패: {e}"
+
+
+# ------------------------------------------------------------------ #
+# 탐지 전후 클립 업로드 (Create) — 스냅샷 이미지 대신 짧은 영상을 저장하는 기능용
+# ------------------------------------------------------------------ #
+def upload_clip(local_path: str, camera: str) -> str | None:
+    """이미 로컬에 인코딩되어 있는 짧은 mp4 클립 파일을 S3에 업로드하고,
+    저장된 경로(객체 키)를 반환합니다. upload_snapshot()과 동일한 날짜별 폴더
+    구조를 쓰되 확장자만 .mp4로 다릅니다.
+
+    Args:
+        local_path: 이미 인코딩되어 디스크에 저장된 mp4 파일 경로
+        camera    : 카메라 이름 (파일명 구분용)
+    Returns:
+        str : S3에 저장된 최종 경로 문자열 (업로드 실패 시 None)
+    """
+    try:
+        client = get_s3_client()
+        safe_cam = "".join(c if c.isalnum() else "_" for c in camera)
+        date_dir = datetime.now().strftime("%Y-%m-%d")
+        key = f"detections/{date_dir}/{safe_cam}_{uuid.uuid4().hex[:8]}.mp4"
+
+        client.upload_file(
+            local_path,
+            _bucket(),
+            key,
+            ExtraArgs={"ContentType": "video/mp4"},
+        )
+        return key
+
+    except (BotoCoreError, ClientError, KeyError) as e:
+        st.session_state["s3_write_warning"] = f"S3 클립 업로드 실패: {e}"
+        return None
