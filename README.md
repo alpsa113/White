@@ -40,7 +40,7 @@ tools/
   convert_forestpersons_phase.py # ForestPersons → phase1/phase3 single 변환
   convert_llvip_to_phase2_raw.py # LLVIP → phase2_raw/pair 변환
   evaluate_checkpoint.py         # best.pt 기준 PR curve/confusion matrix 생성
-  plot_training_metrics.py       # 학습 로그 → CSV/PNG 그래프 생성
+  plot_training_metrics.py       # metrics.csv → PNG 그래프 생성
   predict_image.py               # 단일 이미지 추론 CLI
   predict_video.py               # 영상 추론 CLI
   manifest_loaders/              # manifest 생성용 source loader
@@ -255,11 +255,11 @@ run_training(
 ```
 
 학습을 실행하면 phase별 checkpoint 폴더에 `metrics.csv`가 함께 누적 저장됩니다.
+Colab에서 `/content/drive/MyDrive/dual_yolo`가 마운트되어 있으면 기본 저장 위치는 Drive 경로입니다.
 
 ```text
-checkpoints/phase1/metrics.csv
-checkpoints/phase2/metrics.csv
-checkpoints/phase3/metrics.csv
+로컬: checkpoints/phase*/metrics.csv
+Colab: /content/drive/MyDrive/dual_yolo/checkpoints/phase*/metrics.csv
 ```
 
 ## RGB-only Ablation
@@ -273,47 +273,44 @@ python tools/build_manifest_splits.py \
 python train.py \
   --phase 1 \
   --phase-cfg configs/phases_rgb_only.yaml \
-  --save-dir checkpoints_rgb_only \
+  --save-dir /content/drive/MyDrive/dual_yolo/checkpoints_rgb_only \
   --device cuda
 
 python train.py \
   --phase 3 \
-  --init-from checkpoints_rgb_only/phase1/best.pt \
+  --init-from /content/drive/MyDrive/dual_yolo/checkpoints_rgb_only/phase1/best.pt \
   --phase-cfg configs/phases_rgb_only.yaml \
-  --save-dir checkpoints_rgb_only \
+  --save-dir /content/drive/MyDrive/dual_yolo/checkpoints_rgb_only \
   --device cuda
 ```
 
 ## 성능 지표와 시각화
 
-학습 중에는 epoch별 지표를 CSV로 저장하고, 필요할 때 CSV/로그를 그래프로 변환합니다.
+학습 중에는 epoch별 지표를 CSV로 저장하고, 필요할 때 CSV를 그래프로 변환합니다.
 
-과거 콘솔 로그를 시각화하려면:
+학습 지표 CSV를 시각화하려면:
 
 ```bash
 python tools/plot_training_metrics.py \
-  --log logs/phase1_train.log \
-  --output-dir outputs/metrics \
+  --metrics /content/drive/MyDrive/dual_yolo/checkpoints/phase1/metrics.csv \
   --prefix phase1
 ```
 
 생성 예시:
 
 ```text
-outputs/metrics/phase1_metrics.csv
-outputs/metrics/phase1_loss_curve.png
-outputs/metrics/phase1_map_curve.png
-outputs/metrics/phase1_class_ap_curve.png
-outputs/metrics/phase1_person_prf_curve.png
+/content/drive/MyDrive/dual_yolo/metrics/phase1_loss_curve.png
+/content/drive/MyDrive/dual_yolo/metrics/phase1_map_curve.png
+/content/drive/MyDrive/dual_yolo/metrics/phase1_class_ap_curve.png
+/content/drive/MyDrive/dual_yolo/metrics/phase1_person_prf_curve.png
 ```
 
 phase 종료 후 `best.pt` 기준 최종 평가를 수행하려면:
 
 ```bash
 python tools/evaluate_checkpoint.py \
-  --checkpoint checkpoints/phase3/best.pt \
+  --checkpoint /content/drive/MyDrive/dual_yolo/checkpoints/phase3/best.pt \
   --phase 3 \
-  --output-dir outputs/metrics \
   --prefix phase3 \
   --device cuda
 ```
@@ -321,11 +318,11 @@ python tools/evaluate_checkpoint.py \
 주요 산출물:
 
 ```text
-phase3_summary.json
-phase3_threshold_table_person.csv
-phase3_pr_curve_person.png
-phase3_confusion_matrix.csv
-phase3_confusion_matrix.png
+/content/drive/MyDrive/dual_yolo/metrics/phase3_summary.json
+/content/drive/MyDrive/dual_yolo/metrics/phase3_threshold_table_person.csv
+/content/drive/MyDrive/dual_yolo/metrics/phase3_pr_curve_person.png
+/content/drive/MyDrive/dual_yolo/metrics/phase3_confusion_matrix.csv
+/content/drive/MyDrive/dual_yolo/metrics/phase3_confusion_matrix.png
 ```
 
 기본 모델 지표는 `train_loss`, `val_loss`, `mAP50`, `mAP50_95`, class별 AP, `Precision_person`, `Recall_person`, `F1_person`을 사용합니다.

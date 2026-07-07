@@ -39,6 +39,16 @@ logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
+COLAB_ARTIFACT_ROOT = Path("/content/drive/MyDrive/dual_yolo")
+
+
+def default_save_dir() -> str:
+    """Colab Drive가 마운트되어 있으면 Drive checkpoint 경로를 기본값으로 사용."""
+    if COLAB_ARTIFACT_ROOT.exists():
+        return str(COLAB_ARTIFACT_ROOT / "checkpoints")
+    return "checkpoints"
+
+
 def load_yaml(path: str) -> dict:
     with open(path) as f:
         return yaml.safe_load(f)
@@ -61,7 +71,7 @@ def run_training(
     init_from: str | None = None,
     model_cfg_path: str = "configs/model.yaml",
     phase_cfg_path: str = "configs/phases.yaml",
-    save_dir: str = "checkpoints",
+    save_dir: str | None = None,
     batch: int | None = None,
     epochs: int | None = None,
     img_size: int = 640,
@@ -71,6 +81,7 @@ def run_training(
     """설정 파일을 읽고 학습기를 구성한 뒤 학습을 실행."""
     if resume and init_from:
         raise ValueError("--resume과 --init-from은 동시에 사용할 수 없습니다.")
+    save_dir = save_dir or default_save_dir()
 
     model_cfg = load_yaml(model_cfg_path)
     phases_yaml = load_yaml(phase_cfg_path)
@@ -142,7 +153,12 @@ def main():
                         default="configs/model.yaml")
     parser.add_argument("--phase-cfg", type=str,
                         default="configs/phases.yaml")
-    parser.add_argument("--save-dir", type=str, default="checkpoints")
+    parser.add_argument(
+        "--save-dir",
+        type=str,
+        default=None,
+        help="checkpoint/metrics 저장 루트. Colab Drive가 있으면 기본값은 /content/drive/MyDrive/dual_yolo/checkpoints",
+    )
     parser.add_argument("--batch",    type=int, default=None)
     parser.add_argument("--epochs",   type=int, default=None)
     parser.add_argument("--img-size", type=int, default=640)

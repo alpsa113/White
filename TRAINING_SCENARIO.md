@@ -463,13 +463,13 @@ python tools/build_manifest_splits.py \
 python train.py \
   --phase 1 \
   --phase-cfg configs/phases_rgb_only.yaml \
-  --save-dir checkpoints_rgb_only
+  --save-dir /content/drive/MyDrive/dual_yolo/checkpoints_rgb_only
 
 python train.py \
   --phase 3 \
-  --init-from checkpoints_rgb_only/phase1/best.pt \
+  --init-from /content/drive/MyDrive/dual_yolo/checkpoints_rgb_only/phase1/best.pt \
   --phase-cfg configs/phases_rgb_only.yaml \
-  --save-dir checkpoints_rgb_only
+  --save-dir /content/drive/MyDrive/dual_yolo/checkpoints_rgb_only
 ```
 
 Phase2는 RGB-TIR pair fusion 학습 단계이므로 RGB-only ablation에서는 실행하지 않습니다.
@@ -479,11 +479,11 @@ Phase2는 RGB-TIR pair fusion 학습 단계이므로 RGB-only ablation에서는 
 ## 9. 성능 지표 산출
 
 학습 중에는 epoch별 지표를 CSV에 누적 저장합니다.
+Colab에서 `/content/drive/MyDrive/dual_yolo`가 마운트되어 있으면 기본 저장 위치는 Drive 경로입니다.
 
 ```text
-checkpoints/phase1/metrics.csv
-checkpoints/phase2/metrics.csv
-checkpoints/phase3/metrics.csv
+로컬: checkpoints/phase*/metrics.csv
+Colab: /content/drive/MyDrive/dual_yolo/checkpoints/phase*/metrics.csv
 ```
 
 매 epoch 기준으로 확인하는 지표:
@@ -506,8 +506,7 @@ F1_person
 
 ```bash
 python tools/plot_training_metrics.py \
-  --log logs/phase1_train.log \
-  --output-dir outputs/metrics \
+  --metrics /content/drive/MyDrive/dual_yolo/checkpoints/phase1/metrics.csv \
   --prefix phase1
 ```
 
@@ -515,20 +514,19 @@ phase 종료 후에는 `best.pt` 기준으로 PR curve와 confusion matrix를 �
 
 ```bash
 python tools/evaluate_checkpoint.py \
-  --checkpoint checkpoints/phase3/best.pt \
+  --checkpoint /content/drive/MyDrive/dual_yolo/checkpoints/phase3/best.pt \
   --phase 3 \
-  --output-dir outputs/metrics \
   --prefix phase3
 ```
 
 생성 산출물:
 
 ```text
-phase3_summary.json
-phase3_threshold_table_person.csv
-phase3_pr_curve_person.png
-phase3_confusion_matrix.csv
-phase3_confusion_matrix.png
+/content/drive/MyDrive/dual_yolo/metrics/phase3_summary.json
+/content/drive/MyDrive/dual_yolo/metrics/phase3_threshold_table_person.csv
+/content/drive/MyDrive/dual_yolo/metrics/phase3_pr_curve_person.png
+/content/drive/MyDrive/dual_yolo/metrics/phase3_confusion_matrix.csv
+/content/drive/MyDrive/dual_yolo/metrics/phase3_confusion_matrix.png
 ```
 
 운영 threshold는 `phase3_threshold_table_person.csv`와 `phase3_pr_curve_person.png`를 기준으로 선정합니다.
