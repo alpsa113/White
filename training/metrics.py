@@ -137,12 +137,33 @@ def _compute_ap(tp: torch.Tensor, fp: torch.Tensor, n_gt: int) -> float:
 
 
 class MeanAveragePrecision:
-    def __init__(self, num_classes: int = 4, iou_thresh: float = 0.5):
+    def __init__(
+        self,
+        num_classes: int = 4,
+        iou_thresh: float = 0.5,
+        iou_thresholds: list[float] | tuple[float, ...] | None = None,
+        operating_conf: float = 0.25,
+        person_class_id: int = 0,
+    ):
         self.num_classes = num_classes
         self.iou_thresh = iou_thresh
-        self.pred_scores = [[] for _ in range(num_classes)]
-        self.pred_tp = [[] for _ in range(num_classes)]
-        self.pred_fp = [[] for _ in range(num_classes)]
+        self.iou_thresholds = list(iou_thresholds or [iou_thresh])
+        if iou_thresh not in self.iou_thresholds:
+            self.iou_thresholds.insert(0, iou_thresh)
+        self.operating_conf = operating_conf
+        self.person_class_id = person_class_id
+        self.pred_scores = [
+            [[] for _ in range(num_classes)]
+            for _ in self.iou_thresholds
+        ]
+        self.pred_tp = [
+            [[] for _ in range(num_classes)]
+            for _ in self.iou_thresholds
+        ]
+        self.pred_fp = [
+            [[] for _ in range(num_classes)]
+            for _ in self.iou_thresholds
+        ]
         self.n_gt = [0 for _ in range(num_classes)]
 
     def update(
@@ -172,41 +193,85 @@ class MeanAveragePrecision:
                 order = cls_scores.argsort(descending=True)
                 cls_pred_boxes = cls_pred_boxes[order]
                 cls_scores = cls_scores[order]
-                matched = torch.zeros(cls_gt_boxes.shape[0], dtype=torch.bool)
+                matched_by_thresh = [
+                    torch.zeros(cls_gt_boxes.shape[0], dtype=torch.bool)
+                    for _ in self.iou_thresholds
+                ]
 
                 for box, score in zip(cls_pred_boxes, cls_scores):
-                    self.pred_scores[cls_id].append(float(score.item()))
                     if cls_gt_boxes.numel() == 0:
-                        self.pred_tp[cls_id].append(0.0)
-                        self.pred_fp[cls_id].append(1.0)
+                        for thresh_idx in range(len(self.iou_thresholds)):
+                            self.pred_scores[thresh_idx][cls_id].append(float(score.item()))
+                            self.pred_tp[thresh_idx][cls_id].append(0.0)
+                            self.pred_fp[thresh_idx][cls_id].append(1.0)
                         continue
 
                     ious = box_iou(box.unsqueeze(0), cls_gt_boxes).squeeze(0)
                     best_iou, best_idx = ious.max(dim=0)
-                    if best_iou >= self.iou_thresh and not matched[best_idx]:
-                        matched[best_idx] = True
-                        self.pred_tp[cls_id].append(1.0)
-                        self.pred_fp[cls_id].append(0.0)
-                    else:
-                        self.pred_tp[cls_id].append(0.0)
-                        self.pred_fp[cls_id].append(1.0)
+                    for thresh_idx, thresh in enumerate(self.iou_thresholds):
+                        matched = matched_by_thresh[thresh_idx]
+                        self.pred_scores[thresh_idx][cls_id].append(float(score.item()))
+                        if best_iou >= thresh and not matched[best_idx]:
+                            matched[best_idx] = True
+                            self.pred_tp[thresh_idx][cls_id].append(1.0)
+                            self.pred_fp[thresh_idx][cls_id].append(0.0)
+                        else:
+                            self.pred_tp[thresh_idx][cls_id].append(0.0)
+                            self.pred_fp[thresh_idx][cls_id].append(1.0)
+
+    def _class_ap(self, thresh_idx: int, cls_id: int) -> float:
+        scores = torch.tensor(self.pred_scores[thresh_idx][cls_id])
+        tp = torch.tensor(self.pred_tp[thresh_idx][cls_id])
+        fp = torch.tensor(self.pred_fp[thresh_idx][cls_id])
+        if scores.numel() > 0:
+            order = scores.argsort(descending=True)
+            tp = tp[order]
+            fp = fp[order]
+        return _compute_ap(tp, fp, self.n_gt[cls_id])
+
+    def _person_prf(self, thresh_idx: int) -> tuple[float, float, float]:
+        cls_id = self.person_class_id
+        scores = torch.tensor(self.pred_scores[thresh_idx][cls_id])
+        tp = torch.tensor(self.pred_tp[thresh_idx][cls_id])
+        fp = torch.tensor(self.pred_fp[thresh_idx][cls_id])
+        if scores.numel() == 0:
+            return 0.0, 0.0, 0.0
+
+        keep = scores >= self.operating_conf
+        tp_sum = float(tp[keep].sum().item())
+        fp_sum = float(fp[keep].sum().item())
+        n_gt = max(self.n_gt[cls_id], 0)
+        precision = tp_sum / (tp_sum + fp_sum + 1e-7) if tp_sum + fp_sum > 0 else 0.0
+        recall = tp_sum / max(n_gt, 1) if n_gt > 0 else 0.0
+        f1 = (
+            2 * precision * recall / (precision + recall + 1e-7)
+            if precision + recall > 0 else 0.0
+        )
+        return precision, recall, f1
 
     def compute(self) -> dict[str, float]:
         metrics: dict[str, float] = {}
         valid_ap = []
+        valid_ap_5095 = []
         names = ["person", "boar", "deer", "non_target"]
+        ap50_idx = self.iou_thresholds.index(self.iou_thresh)
         for cls_id in range(self.num_classes):
-            scores = torch.tensor(self.pred_scores[cls_id])
-            tp = torch.tensor(self.pred_tp[cls_id])
-            fp = torch.tensor(self.pred_fp[cls_id])
-            if scores.numel() > 0:
-                order = scores.argsort(descending=True)
-                tp = tp[order]
-                fp = fp[order]
-            ap = _compute_ap(tp, fp, self.n_gt[cls_id])
+            ap = self._class_ap(ap50_idx, cls_id)
             key = f"AP_{names[cls_id] if cls_id < len(names) else cls_id}"
             metrics[key] = ap
             if ap == ap:
                 valid_ap.append(ap)
+            for thresh_idx in range(len(self.iou_thresholds)):
+                ap_at_thresh = self._class_ap(thresh_idx, cls_id)
+                if ap_at_thresh == ap_at_thresh:
+                    valid_ap_5095.append(ap_at_thresh)
         metrics["mAP50"] = sum(valid_ap) / len(valid_ap) if valid_ap else 0.0
+        metrics["mAP50_95"] = (
+            sum(valid_ap_5095) / len(valid_ap_5095)
+            if valid_ap_5095 else 0.0
+        )
+        precision, recall, f1 = self._person_prf(ap50_idx)
+        metrics["Precision_person"] = precision
+        metrics["Recall_person"] = recall
+        metrics["F1_person"] = f1
         return metrics
