@@ -21,7 +21,7 @@ model:
 training:
   img_size: 640
   batch_size: 4
-  grad_accum_steps: 2
+  grad_accum_steps: 1
   num_workers: 4
   amp: true
 
