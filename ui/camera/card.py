@@ -21,6 +21,13 @@ try:
 except ImportError:
     cv2 = None
 
+@st.cache_data
+def _blank_placeholder() -> Image.Image:
+    """업로드 전 카드에 표시할 빈 화면 — 실제 영상과 같은 16:9 비율로 만들어,
+    업로드 전/후로 박스 크기가 크게 달라지지 않게 합니다. 결과가 항상 같으므로
+    캐시해서 매 렌더마다 새로 생성하지 않습니다."""
+    return Image.new("RGB", (960, 540), color=(230, 232, 235))
+
 def render_camera_card(cam: dict, video_slots: dict) -> None:
     """카메라 1대에 대한 카드를 렌더링합니다."""
     ss = st.session_state
@@ -40,12 +47,13 @@ def render_camera_card(cam: dict, video_slots: dict) -> None:
                 uploaded = st.file_uploader(
                     "미디어 업로드", type=list(IMAGE_EXTS + VIDEO_EXTS), key=f"upload_{cid}"
                 )
-                if st.button("비우기 🗑️", key=f"clear_btn_{cid}", use_container_width=True):
-                    reset_cam_state(cid)
-                    st.rerun()
 
         if uploaded is not None:
             _handle_upload(cam, uploaded)
+        elif ss.get(f"fp_{cid}") is not None:
+            # file_uploader 자체의 X로 파일이 제거된 경우 — 업로드/재생 상태를 정리
+            reset_cam_state(cid)
+            st.rerun()
 
         is_grid = ss.get("selected_cam") == "전체 구역"
         image_slot = _render_image_area(cam, is_grid, video_slots)
@@ -140,7 +148,9 @@ def _render_playback_state(cam: dict, image_slot) -> None:
     cid = cam["id"]
 
     if ss.get(f"fp_{cid}") is None:
-        image_slot.info("대기 중 — ⚙️ 아이콘을 눌러 업로드하세요")
+        # 업로드 전 — 실제 영상과 같은 16:9 비율의 빈 화면으로 자리를 잡아둬서
+        # "⛶" 오버레이 아이콘 위치가 업로드 전후로 흔들리지 않게 합니다.
+        image_slot.image(_blank_placeholder(), use_container_width=True)
 
     elif ss.get(f"playing_{cid}"):
         # TODO(임시/테스트용): 반복 재생 중 로그가 계속 쌓이는 것을 막기 위한 일시정지 버튼.
@@ -149,7 +159,6 @@ def _render_playback_state(cam: dict, image_slot) -> None:
             ss[f"playing_{cid}"] = False
             st.rerun()
         # 실제 프레임 갱신 자체는 run_playback_loop()가 전담
-
     else:
         result = ss.get(f"result_{cid}")
         if result:

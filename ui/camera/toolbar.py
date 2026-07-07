@@ -24,12 +24,11 @@ def _sync_grid_count() -> None:
     st.session_state["grid_count"] = st.session_state["_grid_count_widget"]
 
 
-def _render_grid_count_selector() -> None:
-    """'전체 구역' 모드에서만 노출되는 총 카메라 개수 선택 UI (+/- 스텝퍼).
-    특정 카메라 집중 보기 중에는 그리드 개념 자체가 없으므로 아무것도 그리지 않고 종료합니다."""
+def _render_camera_count_selector() -> None:
+    """총 카메라 개수 선택 UI (+/- 스텝퍼). 그리드/스포트라이트 모드 모두에서
+    노출됩니다 — 스포트라이트에서도 이 값이 전체 카메라 목록(썸네일 포함)
+    크기를 결정하기 때문입니다."""
     ss = st.session_state
-    if ss.get("selected_cam") != "전체 구역":
-        return
     # step=1을 주면 Streamlit이 입력창 옆에 -/+ 버튼을 자동으로 붙여줍니다.
     st.number_input(
         "카메라 개수", min_value=1, max_value=MAX_CAMERAS, step=1,
@@ -51,14 +50,7 @@ def render_dashboard_header(valid_options: list[str]) -> bool:
     ss = st.session_state
     is_grid_mode = ss["selected_cam"] == "전체 구역"
 
-    # '전체 구역'일 때만 카메라 개수/순서 변경 컬럼을 추가로 만듭니다.
-    # 특정 카메라를 볼 때는 이 두 컬럼 자체가 없어야, 구역 선택 드롭다운이
-    # 빈 공간 없이 화면 맨 오른쪽 끝에 자연스럽게 붙습니다.
-    if is_grid_mode:
-        h1, h2, h3 = st.columns([2.8, 1.2, 1.5])
-    else:
-        h1, h2 = st.columns([2.8, 1.2])
-        h3 = None
+    h1, h2, h3 = st.columns([2.8, 1.2, 1.5])
 
     with h1:
         st.markdown("**라이브 카메라 피드**")
@@ -72,8 +64,7 @@ def render_dashboard_header(valid_options: list[str]) -> bool:
             on_change=_sync_selected_cam,
             label_visibility="visible",
         )
-    if is_grid_mode:
-        with h3:
-            _render_grid_count_selector()
+    with h3:
+        _render_camera_count_selector()
 
     return is_grid_mode
