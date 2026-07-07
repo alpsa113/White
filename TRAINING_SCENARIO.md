@@ -476,7 +476,66 @@ Phase2는 RGB-TIR pair fusion 학습 단계이므로 RGB-only ablation에서는 
 
 ---
 
-## 9. 현재 남은 실데이터 검증 항목
+## 9. 성능 지표 산출
+
+학습 중에는 epoch별 지표를 CSV에 누적 저장합니다.
+
+```text
+checkpoints/phase1/metrics.csv
+checkpoints/phase2/metrics.csv
+checkpoints/phase3/metrics.csv
+```
+
+매 epoch 기준으로 확인하는 지표:
+
+```text
+train_loss
+val_loss
+mAP50
+mAP50_95
+AP_person
+AP_boar
+AP_deer
+AP_non_target
+Precision_person
+Recall_person
+F1_person
+```
+
+학습 중 그래프 파일을 매 epoch마다 생성하지는 않습니다. 필요 시 또는 phase 종료 후 아래 도구로 curve를 생성합니다.
+
+```bash
+python tools/plot_training_metrics.py \
+  --log logs/phase1_train.log \
+  --output-dir outputs/metrics \
+  --prefix phase1
+```
+
+phase 종료 후에는 `best.pt` 기준으로 PR curve와 confusion matrix를 생성합니다.
+
+```bash
+python tools/evaluate_checkpoint.py \
+  --checkpoint checkpoints/phase3/best.pt \
+  --phase 3 \
+  --output-dir outputs/metrics \
+  --prefix phase3
+```
+
+생성 산출물:
+
+```text
+phase3_summary.json
+phase3_threshold_table_person.csv
+phase3_pr_curve_person.png
+phase3_confusion_matrix.csv
+phase3_confusion_matrix.png
+```
+
+운영 threshold는 `phase3_threshold_table_person.csv`와 `phase3_pr_curve_person.png`를 기준으로 선정합니다.
+
+---
+
+## 10. 현재 남은 실데이터 검증 항목
 
 | 항목 | 확인 내용 |
 |------|-----------|
@@ -485,6 +544,6 @@ Phase2는 RGB-TIR pair fusion 학습 단계이므로 RGB-only ablation에서는 
 | phase3 데이터 | GOP single/empty/pair 비율, hard negative tag 분포 |
 | label 품질 | 폴더 class id와 label class id 일치 여부 |
 | split 품질 | 같은 scene/stem이 train/val로 갈라지지 않는지 |
-| 성능 지표 | class별 AP/recall, RGB vs TIR 성능 차이, empty false positive |
+| 성능 지표 | mAP50/mAP50-95, class별 AP, person precision/recall/F1, PR curve, confusion matrix |
 
 학습 완료 후 이미지/영상 추론 실행 방법과 결과 JSON 구조는 `INFERENCE_PIPELINE.md`를 참고합니다.

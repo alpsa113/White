@@ -11,6 +11,7 @@ Trainer — 학습 루프 (Phase 1·2·3 공통)
 import os
 import time
 import logging
+import csv
 from pathlib import Path
 
 import torch
@@ -44,6 +45,7 @@ class Trainer:
         self.cfg = cfg or PHASE_DEFAULTS[phase]
         self.save_dir = Path(save_dir) / f"phase{phase}"
         self.save_dir.mkdir(parents=True, exist_ok=True)
+        self.metrics_path = self.save_dir / "metrics.csv"
         self.amp = amp
         self.grad_accum_steps = max(1, grad_accum_steps)
 
@@ -79,6 +81,60 @@ class Trainer:
         self.start_epoch = 0
         self.best_val_loss = float("inf")
         self.best_map50 = 0.0
+
+    # ------------------------------------------------------------------
+    def _write_epoch_metrics(
+        self,
+        epoch: int,
+        train_metrics: dict[str, float],
+        val_metrics: dict[str, float],
+        elapsed_sec: float,
+    ) -> None:
+        """epoch별 지표를 CSV에 누적 저장."""
+        row = {
+            "phase": self.phase,
+            "epoch": epoch,
+            "elapsed_sec": elapsed_sec,
+            "lr": self.optimizer.param_groups[0]["lr"],
+            "train_loss": train_metrics.get("total", float("nan")),
+        }
+        row.update({f"train_{key}": value for key, value in train_metrics.items()})
+        row.update(val_metrics)
+
+        columns = [
+            "phase",
+            "epoch",
+            "elapsed_sec",
+            "lr",
+            "train_loss",
+            "val_loss",
+            "mAP50",
+            "mAP50_95",
+            "AP_person",
+            "AP_boar",
+            "AP_deer",
+            "AP_non_target",
+            "Precision_person",
+            "Recall_person",
+            "F1_person",
+        ]
+        columns.extend(sorted(key for key in row if key not in columns))
+
+        existing_rows: list[dict] = []
+        if self.metrics_path.exists():
+            with self.metrics_path.open("r", encoding="utf-8", newline="") as f:
+                reader = csv.DictReader(f)
+                existing_rows = list(reader)
+                if reader.fieldnames:
+                    columns = list(dict.fromkeys([*reader.fieldnames, *columns]))
+
+        mode = "w" if existing_rows else "a"
+        with self.metrics_path.open(mode, encoding="utf-8", newline="") as f:
+            writer = csv.DictWriter(f, fieldnames=columns)
+            writer.writeheader()
+            for existing in existing_rows:
+                writer.writerow(existing)
+            writer.writerow(row)
 
     # ------------------------------------------------------------------
     @staticmethod
@@ -236,7 +292,12 @@ class Trainer:
         self.model.eval()
         total_loss = 0.0
         n = 0
-        metric = MeanAveragePrecision(num_classes=4, iou_thresh=0.5)
+        metric = MeanAveragePrecision(
+            num_classes=4,
+            iou_thresh=0.5,
+            iou_thresholds=[x / 100 for x in range(50, 100, 5)],
+            operating_conf=0.25,
+        )
         for batch in self.val_loader:
             batch = self._to_device(batch)
             rgb     = batch.get("rgb")
@@ -328,6 +389,10 @@ class Trainer:
                 )
                 logger.info(f"  {metric_str}")
                 print(f"  {metric_str}")
+            else:
+                val_metrics = {}
+
+            self._write_epoch_metrics(epoch, avg, val_metrics, elapsed)
 
             last_val_loss = val_loss
             last_map50 = map50

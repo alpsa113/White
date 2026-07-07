@@ -146,7 +146,7 @@ def build_loaders(
         batch_sampler=train_batch_sampler,
         num_workers=num_workers,
         collate_fn=collate_fn,
-        pin_memory=True,
+        pin_memory=torch.cuda.is_available(),
     )
 
     val_loader = None
@@ -170,6 +170,6 @@ def build_loaders(
             batch_sampler=val_batch_sampler,
             num_workers=num_workers,
             collate_fn=collate_fn,
-            pin_memory=True,
+            pin_memory=torch.cuda.is_available(),
         )
     return train_loader, val_loader
