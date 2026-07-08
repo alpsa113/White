@@ -40,24 +40,24 @@ phase2:
       ann_file: data/manifests/phase2_val.json
 
 phase3:
-  max_epochs: 15
+  max_epochs: 20
   aux_active: false
   uncertainty_active: false
   uncertainty_start_epoch: null
   fusion_reg_active: true
-  backbone_unfreeze_epoch: 8
+  backbone_unfreeze_epoch: 6
   hard_negative_sampling:
     enabled: true
-    small_box_area: 1024
+    small_box_area: 1600
     base_weight: 1.0
     weights:
       distant_person: 2.0
-      small_non_target: 2.0
-      non_target: 1.5
+      small_non_target: 3.0
+      non_target: 2.0
   allow_rgb_only: true
   allow_thm_only: true
   allow_pairs: true
-  class_weights: [1.5, 1.0, 1.0, 0.05]   # person 클래스 가중치 상향
+  class_weights: [1.8, 1.0, 1.0, 0.3]   # person과 non_target 구분 학습 강화
   datasets:
     - type: manifest
       root: .

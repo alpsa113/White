@@ -44,7 +44,7 @@ phases:
         include_modalities: [rgb]
         modality_dirs:
           rgb: rgb
-        image_dir: img
+        image_dir: .
         cond_vec_by_modality:
           rgb: [0.0, 0.5, 1.0]
         tags: [empty_background]
