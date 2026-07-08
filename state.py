@@ -24,6 +24,13 @@ def init_session_state() -> None:
     ss.setdefault("simulate", True)       # True면 backend.py 호출 없이 무작위 탐지 데이터를 생성
     ss.setdefault("person_ratio", 0.03)    # 데모 모드에서 탐지 객체가 '사람'으로 나올 확률 (0.0~1.0)
 
+    # ── 인증 상태 ──
+    # authenticated가 True가 되기 전까지 app.py는 views/login.py만 렌더링합니다.
+    # role은 "admin" | "user" — 사이드바 페이지 버튼/설정 노출 범위를 가릅니다.
+    ss.setdefault("authenticated", False)
+    ss.setdefault("role", None)
+    ss.setdefault("username", None)
+
     # ── UI 및 알람 제어 상태 ──
     ss.setdefault("current_page", "관제 대시보드")  # 현재 선택된 페이지 (상단 네비게이션 버튼으로 전환)
     ss.setdefault("selected_cam", "전체 구역")  # "전체 구역" → 그리드 보기 / 특정 카메라명 → 집중 보기

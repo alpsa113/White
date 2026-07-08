@@ -7,10 +7,12 @@ views/dashboard.py — 페이지1: 관제 대시보드
 render() 함수만 노출하는 모듈이므로, 그 자동 동작과 충돌하지 않도록 폴더명을
 "views"로 정했습니다. 반드시 app.py에서 import하여 호출하는 방식으로만 사용하세요.
 
-카메라 목록 준비는 services/camera_registry.py, 헤더 위젯은
-ui/camera/toolbar.py, 카드 배치는 ui/camera/grid.py·spotlight.py에 위임하고,
-이 파일은 배치 순서만 조립합니다 (render()가 영상 재생 등으로 아주 자주
-재실행되므로, 로직은 최대한 다른 모듈에 둡니다).
+카메라 목록 준비는 services/camera_registry.py, 제어 위젯(구역 선택/카메라
+개수)은 ui/camera/toolbar.py가 사이드바에 렌더링하고, 카드 배치는
+ui/camera/grid.py·spotlight.py에 위임하고, 이 파일은 배치 순서만 조립합니다
+(render()가 영상 재생 등으로 아주 자주 재실행되므로, 로직은 최대한 다른
+모듈에 둡니다). 메인 영역에는 카메라 그리드/스포트라이트만 그려지므로 CCTV
+화면이 페이지 최상단에 바로 붙습니다.
 
 화면 구성 — 그리드/스포트라이트 2가지뿐입니다:
     "전체 구역" 선택 시           → 그리드 (ui.camera.grid)
