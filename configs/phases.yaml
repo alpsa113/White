@@ -53,11 +53,12 @@ phase3:
     weights:
       distant_person: 2.0
       small_non_target: 3.0
-      non_target: 2.0
+      non_target: 3.0
+      empty_background: 1.5
   allow_rgb_only: true
   allow_thm_only: true
   allow_pairs: true
-  class_weights: [1.8, 1.0, 1.0, 0.3]   # person과 non_target 구분 학습 강화
+  class_weights: [1.5, 1.0, 1.0, 0.7]   # phase3 오탐 억제를 위해 non_target/empty 학습 강화
   datasets:
     - type: manifest
       root: .
