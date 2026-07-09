@@ -129,17 +129,19 @@ def render_sidebar() -> None:
         #
         # 권한별 노출 범위:
         #   admin → "실시간 감시" / "관리자 로그" / "설정" 3개 모두
-        #   user  → "실시간 감시" 하나만 (버튼 자체를 숨겨 다른 페이지로 이동할 수단을 제공하지 않음.
-        #            app.py에서도 current_page를 강제 고정하는 이중 방어를 함께 적용합니다)
+        #   user  → "실시간 감시" / "관리자 로그" 2개 (단, "관리자 로그" 안의 편집 탭은
+        #            숨겨져 조회만 가능 — views/logs.py 참고). "설정" 버튼만 숨겨 다른
+        #            수단으로 접근하지 못하게 하고, app.py에서도 current_page를 강제
+        #            고정하는 이중 방어를 함께 적용합니다.
         if st.button("실시간 감시", use_container_width=True,
                      type="primary" if ss.current_page == "관제 대시보드" else "secondary"):
             ss.current_page = "관제 대시보드"
             st.rerun()  # 클릭 즉시 페이지 전환이 반영되도록 강제 재실행
+        if st.button("관리자 로그", use_container_width=True,
+                     type="primary" if ss.current_page == "탐지 데이터 로그" else "secondary"):
+            ss.current_page = "탐지 데이터 로그"
+            st.rerun()
         if ss.role == "admin":
-            if st.button("관리자 로그", use_container_width=True,
-                         type="primary" if ss.current_page == "탐지 데이터 로그" else "secondary"):
-                ss.current_page = "탐지 데이터 로그"
-                st.rerun()
             if st.button("설정", use_container_width=True,
                          type="primary" if ss.current_page == "설정" else "secondary"):
                 ss.current_page = "설정"

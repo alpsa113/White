@@ -9,7 +9,9 @@ app.py — GOP 통합 감시 시스템 메인 엔트리포인트
 session_state.authenticated가 False인 동안은 views/login.py만 렌더링되고
 그 외 모든 로직(사이드바, 카메라, 재생 루프)은 실행되지 않습니다. 로그인
 성공 후에는 role("admin"|"user")에 따라 사이드바 노출 범위와 접근 가능한
-페이지가 달라집니다.
+페이지가 달라집니다 — "설정" 페이지만 admin 전용이고, "관제 대시보드"·
+"탐지 데이터 로그"는 두 role 모두 접근할 수 있습니다(단, "탐지 데이터 로그"
+안의 편집 탭은 admin에게만 보입니다 — views/logs.py 참고).
 
 실행 방법:
     streamlit run app.py
@@ -43,10 +45,11 @@ if not ss.authenticated:
 # 시계 + 로그아웃 → 로그인 이후 어떤 페이지를 보고 있든 항상 동일하게 사이드바에 표시됩니다.
 render_sidebar()
 
-# user 권한은 "관제 대시보드" 외 페이지에 접근할 수 없습니다. 사이드바 버튼 자체를
-# 숨기는 것만으로는 이전 세션에 남아있던 current_page 값을 막을 수 없으므로,
-# 여기서 한 번 더 강제로 고정합니다 (이중 방어).
-if ss.role == "user":
+# user 권한은 "설정" 페이지에 접근할 수 없습니다("관제 대시보드"/"탐지 데이터
+# 로그"는 두 role 모두 접근 가능). 사이드바 버튼 자체를 숨기는 것만으로는
+# 이전 세션(예: admin으로 설정을 보다가 로그아웃 후 user로 재로그인)에 남아있던
+# current_page 값을 막을 수 없으므로, 여기서 한 번 더 강제로 고정합니다 (이중 방어).
+if ss.role == "user" and ss.current_page == "설정":
     ss.current_page = "관제 대시보드"
 
 page_selection = ss.current_page

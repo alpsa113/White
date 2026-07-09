@@ -6,6 +6,8 @@ dashboard.py와 마찬가지로 render() 함수로만 노출되며, app.py에서
 상단 설명 참고)
 
 로그 목록을 최신순으로 정렬한 뒤, 조회 탭과 편집 탭 두 개를 조립합니다.
+편집 탭(render_manage_tab)은 admin 권한에서만 노출됩니다 — user 권한은 이
+페이지에서 조회만 가능하고 수정/삭제는 할 수 없습니다.
 """
 import streamlit as st
 
@@ -32,11 +34,14 @@ def render() -> None:
         reverse=True,
     )
 
-    # 조회(읽기 전용)와 편집(수정/삭제)을 탭으로 분리하여, 실수로 값을 바꾸는 것을 방지
-    tab_view, tab_manage = st.tabs(["로그 조회 및 이미지", "로그 편집 및 삭제"])
+    # 조회(읽기 전용)와 편집(수정/삭제)을 탭으로 분리하여, 실수로 값을 바꾸는 것을 방지.
+    # 편집 탭은 admin 권한에서만 렌더링합니다 — user는 탭 자체가 보이지 않습니다.
+    if ss.role == "admin":
+        tab_view, tab_manage = st.tabs(["로그 조회 및 이미지", "로그 편집 및 삭제"])
+        with tab_manage:
+            render_manage_tab(sorted_logs)
+    else:
+        (tab_view,) = st.tabs(["로그 조회 및 이미지"])
 
     with tab_view:
         render_view_tab(sorted_logs)
-
-    with tab_manage:
-        render_manage_tab(sorted_logs)

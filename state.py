@@ -32,9 +32,15 @@ def init_session_state() -> None:
     ss.setdefault("username", None)
 
     # ── UI 및 알람 제어 상태 ──
-    ss.setdefault("current_page", "관제 대시보드")  # 현재 선택된 페이지 (상단 네비게이션 버튼으로 전환)
+    ss.setdefault("current_page", "관제 대시보드")  # 현재 선택된 페이지 (로그인 시 role에 따라 재설정됨 — views/login.py)
     ss.setdefault("selected_cam", "전체 구역")  # "전체 구역" → 그리드 보기 / 특정 카메라명 → 집중 보기
-    ss.setdefault("grid_count", 4)              # '전체 구역' 그리드에 표시할 총 카메라 개수 (대시보드에서 +/- 조절)
+
+    # ── 초소(지도 마커) 설정 ──
+    # 카메라 개수/이름은 더 이상 스텝퍼가 아니라 설정 페이지에서 지도에 마킹한
+    # 초소 개수로 자동 결정됩니다. 상세 스키마는 services/outposts.py 참고.
+    ss.setdefault("outposts", [])                    # [{"id","cctv_no","info","source","x_ratio","y_ratio"}, ...]
+    ss.setdefault("_outpost_id_counter", 0)           # 마커 삭제 후에도 id가 재사용되지 않도록 하는 증가 카운터
+    ss.setdefault("_outpost_map_image_bytes", None)   # 업로드된 지도 원본 이미지 (PNG/JPEG 바이트)
 
     _sync_db_and_s3()
 

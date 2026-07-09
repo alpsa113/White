@@ -9,16 +9,21 @@ import math
 
 import streamlit as st
 
-from config import build_camera_list, MAX_CAMERAS
+from config import build_camera_list
 from services.playback import reset_cam_state
+from services.outposts import get_outposts, to_camera_list
 
 
 def get_active_cameras() -> list[dict]:
-    """session_state.grid_count에 맞춰 카메라 목록을 만들고, 저장된 표시 순서를
-    적용한 뒤, 그리드 축소로 사라진 카메라의 리소스를 정리하고, 최종 목록을 반환합니다."""
-    ss = st.session_state
-    total = max(1, min(ss.get("grid_count", 4), MAX_CAMERAS))
-    cameras = build_camera_list(total)
+    """설정 페이지에서 지도에 마킹한 초소(services/outposts.py) 목록을 카메라
+    목록으로 변환해 반환합니다. 관리자가 아직 초소를 하나도 마킹하지 않은
+    초기 상태에서는 화면이 완전히 비어 보이지 않도록 기본 카메라 1개로
+    폴백합니다 (build_camera_list(1)).
+
+    이전에는 session_state.grid_count(+/- 스텝퍼)로 개수를 정했지만, 이제는
+    초소 마커 개수가 곧 카메라 개수이므로 그 스텝퍼는 제거되었습니다."""
+    outposts = get_outposts()
+    cameras = to_camera_list(outposts) if outposts else build_camera_list(1)
     _cleanup_removed_cameras(cameras)
     return cameras
 

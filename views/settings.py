@@ -1,15 +1,30 @@
 """
-views/settings.py — 페이지3: 설정
+views/settings.py — 페이지3: 설정 (admin 전용)
 
-데모 모드, 사람 등장 비율, 시계 표시 여부 등 자주 바뀌지 않는 설정을 모아둔
-페이지입니다. render() 함수로만 노출되며 app.py에서 호출합니다.
+초소(카메라) 위치 마킹, 데모 모드, 사람 등장 비율, 시스템 상태 등 자주
+바뀌지 않는 설정을 모아둔 페이지입니다. render() 함수로만 노출되며
+app.py에서 호출합니다. app.py의 이중 방어 로직에 의해 user 권한은 이
+페이지에 진입할 수 없습니다.
+
+관리자 로그인 직후 가장 먼저 표시되는 페이지이기도 합니다
+(config.DEFAULT_LANDING_PAGE) — 실시간 감시를 시작하려면 먼저 초소를
+마킹해 카메라를 만들어야 하기 때문입니다.
 """
 import streamlit as st
+
+from ui.outposts.editor import render_outpost_editor
 
 
 def render() -> None:
     """설정 페이지 전체를 렌더링합니다."""
     ss = st.session_state
+
+    # ── 초소 위치 설정 (지도 업로드 + 마킹 + 초소 정보 편집) ──
+    # 카메라 개수/이름의 유일한 출처입니다 — 여기서 마킹한 개수만큼 '실시간
+    # 감시' 페이지의 카메라가 자동으로 생성됩니다 (기존 +/- 스텝퍼는 제거됨).
+    render_outpost_editor()
+
+    st.divider()
     st.markdown("### 시스템 설정")
 
     # ==================================================================== #
