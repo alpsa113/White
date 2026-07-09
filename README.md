@@ -5,43 +5,49 @@
 ```
 project/
 ├── app.py                    # 메인 엔트리포인트 (Streamlit 실행 시작점, 로그인 게이트 + 페이지 라우팅)
-├── config.py                 # 전역 설정값 (계정, 사용자 유형 매핑, 클래스 색상, 임계값, 클립 길이 등)
+├── config.py                 # 전역 설정값 (계정, 클래스 색상, 임계값, 클립 길이, 초소 프리셋 등)
 ├── state.py                  # session_state 초기화
 ├── requirements.txt          # 프로젝트 의존성 목록 (pip install -r requirements.txt)
 ├── backend.py                # FastAPI 추론 서버 (별도 프로세스로 실행)
 ├── db_rds.py                 # AWS RDS(MySQL) 연동
 ├── s3_storage.py              # AWS S3 이미지/클립 저장 연동
 │
+├── assets/
+│   └── gop_preset_map.png     # 초소 위치 프리셋 지도 이미지 (config.PRESET_MAP_IMAGE_PATH가 가리킴, 마커 좌표는 미포함)
+├── scripts/
+│   └── generate_preset_map.py # 위 플레이스홀더 지도를 생성한 스크립트 (실제 지도 교체 시 참고용)
+│
 ├── services/                  # 화면 없는 "로직" — DB/S3/추론/재생/클립 녹화/초소 관리
 │   ├── detection.py            # 백엔드 API 호출, 박스 그리기, 데모 데이터 생성
 │   ├── tracking.py               # 프레임 1장의 사람/동물 트래킹 → 로그/알람 연결
-│   ├── playback.py                # 다중 카메라 재생 루프 (프레임 진행, 반복 재생)
+│   ├── playback.py                # 다중 카메라 재생 루프 + 미디어 반영(start_camera_media)
 │   ├── clip_recorder.py            # 탐지 전후 짧은 클립(mp4) 녹화·인코딩·S3 업로드
 │   ├── alerts.py                    # 탐지 로그 생성/갱신, DB 동기화
-│   ├── camera_registry.py            # 초소 마커 → 카메라 목록 변환, 정리
+│   ├── camera_registry.py            # 초소 → 카메라 목록 변환, 매핑된 영상 자동 반영, 정리
 │   ├── log_management.py              # 로그 편집/삭제 저장 처리
 │   ├── audio_alert.py                  # 사람 탐지 시 알림음 생성
-│   └── outposts.py                      # 초소(지도 마커) CRUD — 카메라 개수/이름의 단일 출처
+│   └── outposts.py                      # 초소(프리셋 마커) 로드/정보 편집/영상 매핑
 │
 ├── ui/                         # Streamlit 화면(위젯) 렌더링 전담
 │   ├── styles.py                 # 여러 화면이 공통으로 쓰는 CSS/인라인 스타일 문자열
 │   ├── layout.py                  # 사이드바(브랜드명/페이지 전환/상태뱃지/시계/최근 탐지/로그아웃)
 │   ├── log_tabs.py                  # 로그 조회 탭 + 편집 탭
 │   ├── camera/                        # 카메라 카드 관련 UI 전용 하위 패키지
-│   │   ├── card.py                      # 카드 레이아웃 + 업로드/재생 상태 전환
+│   │   ├── card.py                      # 카드 레이아웃 + 재생 상태 전환 (업로드 버튼 없음 — §3 참고)
 │   │   ├── zoom.py                        # 마우스 휠/드래그 확대·이동 (순수 JS, 독립)
 │   │   ├── grid.py                          # 그리드 배치
 │   │   ├── spotlight.py                       # Zoom 발표자 화면 스타일 집중 보기
 │   │   └── toolbar.py                           # 대시보드 헤더(구역 선택) 위젯 조립
 │   └── outposts/                      # 초소(지도 마커) 관련 UI 전용 하위 패키지
-│       ├── editor.py                    # 설정 페이지: 지도 업로드 + 클릭 마킹 + 초소정보 편집
+│       ├── marker_overlay.py            # 지도 위 마커 오버레이 공용 모듈 (editor.py·viewer.py 공유)
+│       ├── editor.py                    # 설정 페이지: 프리셋 지도 표시 + 초소정보/영상 매핑 편집
 │       └── viewer.py                     # 대시보드 "관제 지도" 탭: 지도 + 점멸 마커 + CCTV 요약
 │
 ├── views/                       # 페이지 단위 조립 (ui + services 호출만)
 │   ├── login.py                    # 페이지0: 로그인 (ID + 사용자 유형 + PW)
 │   ├── dashboard.py                 # 페이지1: 관제 대시보드 ("카메라 화면"/"관제 지도" 탭)
 │   ├── logs.py                       # 페이지2: 탐지 데이터 로그 (role에 따라 편집 탭 노출 여부 결정)
-│   └── settings.py                    # 페이지3: 설정 (admin 전용, 초소 마킹 포함)
+│   └── settings.py                    # 페이지3: 설정 (admin 전용, 초소 정보/영상 매핑 포함)
 │
 └── utils/
     └── formatters.py              # 화면 표시용 순수 포맷 함수
@@ -59,7 +65,8 @@ app.py가 최상단에서 모두를 조립
 `services/clip_recorder.py`를 가져다 쓰는 방향으로만 흐르고, 반대 방향 import는
 없습니다. `ui/camera/` 안에서도 `card.py`가 `zoom.py`를 가져다 쓰는 방향으로만
 흐르고, `ui/outposts/`의 `editor.py`·`viewer.py`는 서로 직접 참조하지 않고
-`services/outposts.py`를 공용 상태 출처로만 공유합니다.
+`services/outposts.py`(상태)와 `ui/outposts/marker_overlay.py`(마커 렌더링)를
+공용 출처로만 공유합니다.
 
 이 시스템은 **페이지 전환/상태뱃지/시계/로그아웃을 모두 사이드바에서 처리합니다.**
 CCTV 화면이 메인 영역 최상단에 바로 붙을 수 있도록 한 설계이며, 관제 화면
@@ -79,39 +86,97 @@ role과 다르면 로그인이 거부됩니다 (`config.USER_TYPE_OPTIONS`).
 | 실시간 감시 (카메라 화면 / 관제 지도 탭) | ✅ | ✅ |
 | 관리자 로그 — 로그 조회 및 이미지 | ✅ | ✅ |
 | 관리자 로그 — 로그 편집 및 삭제 | ✅ | ❌ (탭 자체가 보이지 않음) |
-| 설정 (초소 마킹 포함) | ✅ | ❌ (버튼 자체가 보이지 않고, `app.py`가 이중으로 차단) |
+| 설정 (초소 정보/영상 매핑 포함) | ✅ | ❌ (버튼 자체가 보이지 않고, `app.py`가 이중으로 차단) |
 
 로그인 직후 랜딩 페이지도 role에 따라 다릅니다(`config.DEFAULT_LANDING_PAGE`):
-관리자는 카메라를 만들기 위해 먼저 **설정** 페이지로, 사용자는 곧바로
-**실시간 감시**로 진입합니다.
+관리자는 초소별 CCTV 영상이 제대로 매핑되어 있는지 먼저 확인할 수 있도록
+**설정** 페이지로, 사용자는 곧바로 **실시간 감시**로 진입합니다.
 
 ---
 
 ## 3. 초소(카메라) 설정 — services/outposts.py, ui/outposts/
 
-과거에는 대시보드에서 "카메라 개수" +/- 스텝퍼로 카메라 수를 정했지만,
-이제는 **설정 페이지에서 지도 위에 클릭으로 마킹한 초소 개수**가 곧 카메라
-개수입니다 (스텝퍼는 제거되었습니다).
+지도 **"이미지"**는 `config.PRESET_MAP_IMAGE_PATH`에 고정되어 있어 관리자가
+업로드하지 않습니다. 반면 그 위의 초소(마커) **"위치"**는 관리자가 설정
+페이지 지도를 클릭해 직접 찍고 지울 수 있습니다 — **찍은 마커 개수가 곧
+'실시간 감시'의 카메라 개수**입니다. 실제 배포 시에는 `config.
+PRESET_MAP_IMAGE_PATH` 경로의 파일만 실제 GOP 관할구역 지도 이미지로
+교체하면 됩니다 (좌표는 관리자가 그 위에서 직접 찍으므로 별도 설정이 필요
+없습니다).
 
-1. 관리자가 설정 페이지에서 지도 이미지를 업로드합니다 (`ui/outposts/editor.py`).
-2. `streamlit-image-coordinates`로 지도를 클릭하면 그 위치에 마커(초소)가
-   추가됩니다. 좌표는 원본 이미지 기준 0~1 비율(x_ratio/y_ratio)로 저장되어
-   (`services/outposts.py`), 화면 크기가 달라져도 항상 같은 상대 위치에
-   마커가 그려집니다.
-3. 마커 옆 표에서 "초소 정보"·"영상 소스"를 직접 입력하고 저장할 수 있고,
-   개별/전체 삭제도 가능합니다.
-4. `services/camera_registry.get_active_cameras()`가 이 초소 목록을
-   `{"id", "name"}` 카메라 딕셔너리로 변환해 나머지 시스템(재생 루프, 트래킹,
-   그리드/스포트라이트)에 기존과 동일하게 공급합니다. 아직 초소를 하나도
-   마킹하지 않은 초기 상태에서는 기본 카메라 1개로 폴백합니다.
+관리자가 설정 페이지(`ui/outposts/editor.py`)에서 초소별로 할 수 있는 일:
+
+1. **마커 추가/삭제** — 지도를 클릭하면 그 위치에 새 마커가 추가됩니다
+   (`services/outposts.add_marker()`). 목록의 🗑 버튼으로 삭제하면 그 채널의
+   재생 리소스도 함께 정리됩니다(`remove_marker()`).
+2. **초소 정보 수정** — 입력하는 즉시 자동 저장됩니다.
+3. **CCTV 영상 매핑(EO/TIR 채널별)** — 저희 탐지 모델은 EO(가시광)·TIR(열화상)
+   두 영상을 함께 입력받는 RGB-IR 융합 모델이므로, 각 초소에 영상을 EO/TIR
+   채널로 각각 매핑해둘 수 있습니다(`services/outposts.set_marker_video()`,
+   팝오버 버튼 🎬 안에 있음 — §3.2 참고). **EO 채널만 실제 재생·탐지
+   파이프라인을 구동**합니다 — `services/camera_registry.get_active_cameras()`가
+   대시보드 진입 시마다 아직 반영되지 않은 채널을 찾아 EO 영상 재생을 자동
+   시작합니다(`services/playback.start_camera_media()`). TIR 채널은 현재
+   매핑 정보만 저장해둘 뿐 재생 파이프라인에 연결되어 있지 않습니다(추후
+   이중 스트림 추론 연동 시 확장 지점). **'실시간 감시' 페이지의 카메라
+   카드는 자체 업로드 버튼을 갖지 않습니다** — 이 설정 페이지 매핑이 그
+   역할을 대신합니다.
+4. **"CCTV 화면 보기" 선택/해제** — 🔵/🔴 버튼으로 토글하며, 이 선택은
+   '카메라 화면' 탭·'관제 지도' 탭과 모두 동기화됩니다(§3.2).
+
+마커 좌표(x_ratio/y_ratio)는 지도 원본 이미지 기준 0~1 비율로 저장되므로,
+설정 페이지와 대시보드 지도 탭에서 이미지가 서로 다른 크기로 표시되더라도
+항상 같은 상대 위치에 마커가 그려집니다.
+
+`services/camera_registry.get_active_cameras()`가 이 초소 목록을
+`{"id", "name"}` 카메라 딕셔너리로 변환해 나머지 시스템(재생 루프, 트래킹,
+그리드/스포트라이트)에 기존과 동일하게 공급합니다. 아직 초소를 하나도
+찍지 않은 초기 상태에서는 기본 카메라 1개로 폴백합니다.
 
 카메라 클래스를 추가/변경할 때 함께 맞춰야 할 5곳(§4의 "탐지 클래스 목록"
 항목)은 초소 설정과 무관하며 그대로 적용됩니다.
 
-현재 초소/지도 이미지는 **세션(session_state) 메모리에만 보관**됩니다 — 기존
-카메라 개수 설정도 세션 한정이었던 것과 동일한 수준이며, 영구 저장이
-필요해지면 `db_rds.py`에 전용 테이블을 추가하고 `services/outposts.py`의
-CRUD 함수만 DB 연동으로 바꿔주면 됩니다.
+현재 초소 목록(위치/정보)과 매핑된 영상은 **세션(session_state) 메모리에만
+보관**됩니다 — 앱 재시작/재로그인 시 초기화됩니다. 영구 저장이 필요해지면
+`db_rds.py`에 전용 테이블(영상은 `s3_storage.py`)을 추가하고
+`services/outposts.py`의 CRUD 함수만 DB/S3 연동으로 바꿔주면 됩니다.
+
+### 3.1 지도 미리보기가 클릭 가능한 마커 버튼을 쓰지 않는 이유
+
+설정 페이지 지도는 새 마커를 "클릭으로 추가"해야 하므로,
+`streamlit_image_coordinates`(클릭 좌표를 돌려주는 컴포넌트)가 이미지 위
+클릭을 전담해서 가로챕니다. 그 위에 대시보드 "관제 지도" 탭처럼 클릭 가능한
+마커 버튼을 또 겹쳐 그리면 "클릭 = 추가"와 "클릭 = 선택"이 같은 이미지
+위에서 충돌합니다. 그래서 설정 페이지 지도는 마커를 PIL로 그려 넣은
+읽기 전용 미리보기(색상만 반영)로 보여주고, 실제 선택/해제·삭제는 그 아래
+목록의 버튼으로 하도록 역할을 분리했습니다(`ui/outposts/editor.py`).
+대시보드 "관제 지도" 탭은 클릭으로 마커를 추가할 필요가 없으므로, 기존처럼
+마커 자체가 클릭 가능한 버튼입니다(`ui/outposts/marker_overlay.py`).
+
+### 3.2 마커 색상과 선택 상태 — 설정 페이지 · 관제 지도 탭 · 카메라 화면 탭 3곳 동기화
+
+설정 페이지의 지도 미리보기와 대시보드의 "관제 지도" 탭은
+`ui/outposts/marker_overlay.py`를 함께 사용해 동일한 색상 규칙을 씁니다.
+
+- 🔵 **하늘색(기본)** — 아직 "CCTV 화면 보기"로 선택되지 않은 마커.
+- 🔴 **빨간색** — "CCTV 화면 보기"로 선택된 마커.
+
+마커를 선택/해제하면(설정 페이지의 🔵/🔴 버튼, 또는 관제 지도 탭의 마커
+클릭) `ui/outposts/marker_overlay.toggle_selection()`이 다음 세 가지를
+한 번에 갱신합니다.
+
+1. `session_state._map_selected_cam_ids` — 관제 지도 탭의 다중 선택(왼쪽
+   CCTV 요약에 표시할 카메라들)과 두 화면의 마커 색상.
+2. `session_state._pending_selected_cam` — '카메라 화면' 탭의 단일 선택을
+   그 카메라로 전환 예약합니다. 사람 탐지 시 자동으로 스포트라이트가
+   전환되는 기존 메커니즘과 **동일한 예약 큐**를 재사용하는 것이라, 실제
+   반영은 다음에 '카메라 화면' 탭이 그려질 때(`ui/camera/toolbar.
+   consume_pending_camera_switch()`) 일어납니다. 선택된 마커가 하나도
+   남지 않으면 "전체 구역"(그리드)으로 예약됩니다.
+
+사람 탐지 시의 점멸(blink)은 이 색상과는 별개 축입니다 — 선택 여부와
+무관하게 현재 색상(빨강/하늘색) 그대로 깜빡이는 효과만 덧붙습니다(관제 지도
+탭에서만 동작 — §4 참고).
 
 ---
 
@@ -120,20 +185,24 @@ CRUD 함수만 DB 연동으로 바꿔주면 됩니다.
 `views/dashboard.py`는 "카메라 화면"과 "관제 지도" 두 탭으로 구성됩니다
 (별도 페이지가 아니라 탭인 이유: §5 참고).
 
-- **카메라 화면** 탭 — 기존과 동일한 그리드/스포트라이트. 업로드, 확대,
-  일시정지 등 실제 조작은 모두 이 탭에서만 이루어집니다.
+- **카메라 화면** 탭 — 기존과 동일한 그리드/스포트라이트. 확대, 일시정지 등
+  실제 조작은 이 탭에서 이루어지지만, **영상 업로드는 이 탭에 없습니다** —
+  '설정' 페이지에서 초소별로 미리 매핑해둔 영상을 대시보드 진입 시 자동으로
+  재생합니다 (§3 참고).
 - **관제 지도** 탭 — 오른쪽 지도 위의 마커를 클릭해 왼쪽에서 볼 카메라를
   고릅니다 (`ui/outposts/viewer.py`). **마커는 다중 선택이 가능합니다** —
   1개를 선택하면 카메라 1개짜리 화면, 여러 개를 선택하면 '카메라 화면' 탭의
   그리드와 동일한 배치 규칙(`services.camera_registry.compute_grid_columns`)
   으로 여러 화면이 함께 표시됩니다. 아무것도 선택하지 않은 초기 상태에는
-  전체 카메라를 보여줍니다. 선택된 마커에는 초록색 테두리가 표시됩니다.
+  전체 카메라를 보여줍니다. 선택된 마커는 빨간색, 그 외에는 하늘색으로
+  표시됩니다(§3.2) — 이 색상 규칙과 선택 상태는 '설정' 페이지의 초소 위치
+  지도와 공유됩니다.
 
-  이 선택 상태(`session_state._map_selected_cam_ids`)는 **오직 "관제 지도"
-  탭 안에서만** 의미가 있습니다 — '카메라 화면' 탭의 구역 선택이나 그리드/
-  스포트라이트 모드에는 전혀 영향을 주지 않습니다(두 탭의 상태는 완전히
-  독립적입니다). Streamlit은 서버 코드로 현재 활성 탭을 강제 전환하는 기능도
-  제공하지 않으므로, 애초에 다른 탭으로 자동 이동시키는 것도 불가능합니다.
+  마커를 선택/해제하면 **'카메라 화면' 탭도 함께 동기화 예약됩니다**
+  (`session_state._pending_selected_cam`, §3.2) — 다음에 그 탭을 보면
+  방금 선택한 카메라의 스포트라이트로 전환되어 있습니다. Streamlit은 서버
+  코드로 현재 활성 탭을 강제 전환하는 기능을 제공하지 않으므로 즉시 다른
+  탭으로 이동시키지는 못하지만, 예약 방식으로 다음 방문 시 반영됩니다.
 
   사람이 탐지된 카메라의 마커는 점멸하고, 그 옆에는 별도의 작은 "⏹" 정지
   아이콘이 함께 붙습니다 — 마커 본체를 클릭하면 선택만 토글되고 점멸은
@@ -155,8 +224,8 @@ CRUD 함수만 DB 연동으로 바꿔주면 됩니다.
 | 파일 | 역할 |
 |---|---|
 | `app.py` | `streamlit run`으로 실행되는 유일한 진입점. 페이지 설정 → `state.init_session_state()` → 로그인 게이트(`views.login`) → `ui.layout.render_sidebar()` → role별 접근 제한(이중 방어) → 카메라 목록 계산 → 현재 선택된 페이지의 `render()` 호출 → `services.playback.run_playback_loop()`. 재생 루프는 **어떤 페이지를 보고 있든** 항상 마지막에 호출되어, 로그/설정 페이지에 있어도 탐지가 끊기지 않습니다. |
-| `config.py` | `build_camera_list()`(초소 미설정 시 초기 폴백 카메라 생성), 클래스별 색상(`COLORS`), 계정 정보(`USERS`), 로그인 사용자 유형 매핑(`USER_TYPE_OPTIONS`), role별 랜딩 페이지(`DEFAULT_LANDING_PAGE`), 백엔드 API 주소(`API_BASE_URL`), 트래킹 튜닝 값 등 전역 상수. |
-| `state.py` | 앱이 (재)실행될 때마다 `st.session_state`에 필요한 키들의 기본값을 채워 넣습니다 (초소/지도 이미지 상태 포함). |
+| `config.py` | `build_camera_list()`(초소가 하나도 없을 때의 폴백 카메라 생성), `PRESET_MAP_IMAGE_PATH`(초소 지도 이미지 경로), 클래스별 색상(`COLORS`), 계정 정보(`USERS`), 로그인 사용자 유형 매핑(`USER_TYPE_OPTIONS`), role별 랜딩 페이지(`DEFAULT_LANDING_PAGE`), 백엔드 API 주소(`API_BASE_URL`), 트래킹 튜닝 값 등 전역 상수. |
+| `state.py` | 앱이 (재)실행될 때마다 `st.session_state`에 필요한 키들의 기본값을 채워 넣습니다 (초소/지도 선택 상태 포함). |
 | `requirements.txt` | `pip install -r requirements.txt`로 한 번에 설치할 패키지 목록. |
 | `backend.py` | YOLO 모델을 메모리에 올려두는 FastAPI 서버. `/detect`(단일 프레임 추론), `/health`(상태 체크), `/stream`(화면 표시 전용 MJPEG 스트리밍) 세 엔드포인트를 제공합니다. Streamlit과는 별개 프로세스로 실행됩니다. |
 | `db_rds.py` | AWS RDS(MySQL) 연동. 테이블 생성, 로그 조회/추가/수정/삭제, 클래스명 ↔ class_id 매핑(`CLASS_ID_MAP`), 스냅샷→클립 교체(`update_snapshot_uri`). |
@@ -170,14 +239,18 @@ CRUD 함수만 DB 연동으로 바꿔주면 됩니다.
 | | `draw_boxes()`, `is_person()` | 박스 그리기, 사람 클래스 판별. |
 | `tracking.py` | `process_frame()` | 프레임 1장의 탐지 결과를 사람/동물 트래킹 상태와 연결해, 신규 로그 생성 또는 기존 로그 갱신을 결정합니다. `person_tracks_{cid}`에 담기는 이 상태는 `ui/outposts/viewer.py`가 지도 마커 점멸 여부를 판단할 때도 그대로 재사용합니다. |
 | `playback.py` | `run_playback_loop()` | 여러 카메라의 영상을 하나의 반복문 안에서 함께 재생합니다. |
-| | `reset_cam_state()` | 카메라 채널의 업로드/재생/클립 관련 리소스를 완전 정리. 초소 삭제 시(`services/outposts.py`)도 동일하게 호출됩니다. |
+| | `start_camera_media()` | 미디어 바이트를 카메라 채널에 반영(영상 재생 시작/이미지 1회 분석) — 설정 페이지의 영상 매핑과 대시보드 진입 시 자동 반영이 공용으로 사용합니다. |
+| | `reset_cam_state()` | 카메라 채널의 재생/클립 관련 리소스를 완전 정리. 새 영상이 매핑될 때(`services/outposts.set_marker_video`)도 호출됩니다. |
 | `clip_recorder.py` | `push_frame_buffer()` / `start_pending_clips()` / `append_pending_clips()` | 탐지 전후 짧은 클립(mp4) 버퍼링·인코딩·S3 업로드. |
 | `alerts.py` | `create_detection_alert()`, `update_detection_alert()` | 로그 생성/갱신, DB 동기화, 스냅샷 S3 업로드. |
-| `camera_registry.py` | `get_active_cameras()` | `services/outposts.py`의 초소 목록을 카메라 목록으로 변환하고, 삭제된 카메라의 리소스를 정리합니다. |
+| `camera_registry.py` | `get_active_cameras()` | `services/outposts.py`의 초소 목록을 카메라 목록으로 변환하고, 매핑된 EO 영상을 아직 반영하지 않은 채널에 자동 반영(`_sync_preset_media`)하고, 삭제된 카메라의 리소스를 정리합니다. |
 | | `compute_grid_columns()`, `get_valid_area_options()` | 그리드 열 수 계산, 구역 선택 드롭다운 옵션 준비. |
 | `log_management.py` | `save_log_edits()` | 로그 편집 탭 저장 처리 — 원본과 비교해 실제로 변경된 행만 반영합니다. |
 | `audio_alert.py` | `play_alert_sound()` | 사람 탐지 시 재생할 비프음을 즉석에서 생성. |
-| `outposts.py` | `add_marker()` / `update_marker()` / `remove_markers()` / `reset_all()` | 초소(지도 마커) CRUD — 카메라 개수/이름의 단일 출처. |
+| `outposts.py` | `get_outposts()` | 현재 등록된 초소(마커) 목록을 반환. |
+| | `add_marker()` / `remove_marker()` | 지도 클릭 좌표로 마커 추가 / id로 마커 삭제(재생 리소스·선택 상태까지 함께 정리). |
+| | `update_marker()` | 초소 정보/영상 소스(메모) 텍스트 갱신 (좌표는 건드리지 않음). |
+| | `set_marker_video()` / `get_marker_video()` | 초소에 CCTV 영상을 채널별(EO/TIR)로 매핑/조회 — EO 매핑 시에만 재생 상태를 정리해 다음 렌더에서 새 영상으로 재초기화되게 함. |
 | | `to_camera_list()` | 초소 목록을 `{"id","name"}` 카메라 딕셔너리 리스트로 변환. |
 
 ### 5.3 `ui/` — Streamlit 화면 렌더링
@@ -192,18 +265,19 @@ CRUD 함수만 DB 연동으로 바꿔주면 됩니다.
 
 | 파일 | 역할 |
 |---|---|
-| `card.py` | 카드 레이아웃(제목/⚙️ 팝오버/업로드) + 상태 전환(대기 → 재생 중 → 정지). `render_camera_card()`가 유일한 공개 진입점입니다. |
+| `card.py` | 카드 레이아웃(제목) + 상태 전환(매핑 전 → 재생 중 → 정지). 자체 업로드 버튼은 없습니다 — 매핑된 영상은 `services/camera_registry.py`가 자동으로 반영합니다. `render_camera_card()`가 유일한 공개 진입점입니다. |
 | `zoom.py` | 집중 보기에서만 켜지는 마우스 휠 확대·드래그 이동. |
 | `grid.py` | `render_camera_grid()` — 카드를 몇 개, 몇 열로 배치할지만 결정. |
 | `spotlight.py` | `render_camera_spotlight()` — 특정 카메라를 좌측에 크게, 나머지를 우측 스크롤 영역에 썸네일로 배치. |
-| `toolbar.py` | 대시보드 사이드바 컨트롤(구역 선택)을 조립. `render_dashboard_header()`가 유일한 공개 진입점입니다. 과거 있었던 "카메라 개수" 스텝퍼는 초소 마킹으로 대체되어 제거되었습니다. |
+| `toolbar.py` | 대시보드 사이드바 컨트롤(구역 선택)을 조립. `render_dashboard_header()`가 유일한 공개 진입점입니다. |
 
 #### `ui/outposts/` — 초소(지도 마커) 전용 하위 패키지
 
 | 파일 | 역할 |
 |---|---|
-| `editor.py` | 설정 페이지: 지도 이미지 업로드 + `streamlit-image-coordinates` 클릭 마킹 + 초소정보/영상소스 표 편집(저장/전체초기화/개별삭제). `render_outpost_editor()`가 유일한 공개 진입점입니다. |
-| `viewer.py` | 대시보드 "관제 지도" 탭: 왼쪽 CCTV 요약 + 오른쪽 지도·점멸 마커. `render_outpost_map()`이 유일한 공개 진입점입니다. |
+| `marker_overlay.py` | 마커 색상 규칙(선택=빨강/기본=하늘색) 상수, 클릭 가능한 마커 버튼(`render_marker()` — 관제 지도 탭 전용), 선택 상태 토글(`toggle_selection()` — 설정 페이지·관제 지도 탭·카메라 화면 탭 3곳에 반영, editor.py도 이 함수를 직접 호출). |
+| `editor.py` | 설정 페이지: 지도 클릭으로 마커 추가(`streamlit_image_coordinates`) + 마커 미리보기(PIL로 그린 읽기 전용 원, §3.1) + 초소별 정보 자동저장 + EO/TIR 영상 매핑(팝오버) + 선택/삭제 버튼. `render_outpost_editor()`가 유일한 공개 진입점입니다. |
+| `viewer.py` | 대시보드 "관제 지도" 탭: 왼쪽 CCTV 요약 + 오른쪽 지도·클릭 가능한 점멸 마커. `render_outpost_map()`이 유일한 공개 진입점입니다. |
 
 ### 5.4 `views/` — 페이지 조립
 
@@ -292,7 +366,8 @@ streamlit run app.py
 3) 터미널 1:  uvicorn backend:app --reload --port 8000
 4) 터미널 2:  streamlit run app.py
 5) 브라우저에서 http://localhost:8501 접속 → 로그인(계정: config.USERS 참고)
-6) (admin) 설정 페이지에서 지도 업로드 + 초소 마킹 → 카메라 자동 생성
+6) (admin) 설정 페이지에서 지도를 클릭해 초소 마커를 찍고, 초소별 EO/TIR
+   CCTV 영상을 매핑 → '실시간 감시'에서 EO 영상이 자동 재생
 ```
 
 데모 계정은 `config.USERS`에 있습니다 (`admin`/`admin1234`, `user`/`user1234`).
@@ -333,23 +408,40 @@ streamlit run app.py
   `config.py`(색상), `db_rds.py`(`CLASS_ID_MAP` 및 기본 `class_map`),
   `services/detection.py`(데모 모드 동물 풀), `ui/log_tabs.py`(편집 탭 드롭다운),
   `DB_create.sql`(초기 데이터) — 5곳을 함께 맞춰야 합니다.
-- **카메라 개수/이름의 단일 출처**: 더 이상 고정 리스트나 +/- 스텝퍼가 아니라,
-  설정 페이지에서 지도에 마킹한 초소 개수로 자동 결정됩니다(§3). 관련 상태 관리는
-  전부 `services/outposts.py`에 있고, `services/camera_registry.py`가 이를
-  나머지 시스템이 쓰는 카메라 목록 형태로 변환합니다.
-- **지도 마커 클릭 = 다중 선택 토글, 점멸 정지는 별도 아이콘**: `ui/outposts/viewer.py`는
-  마커(점멸 여부 무관)를 클릭하면 왼쪽 패널에 표시할 카메라 선택을 토글합니다
-  (여러 개 동시 선택 가능, 선택 개수에 맞춰 그리드로 배치). 이 선택 상태는
-  "관제 지도" 탭 전용이며 '카메라 화면' 탭의 구역 선택과는 완전히 분리되어
-  있습니다. `services/tracking.py`가 관리하는 `person_tracks_{cid}`(카메라별
-  현재 추적 중인 사람 트랙)를 그대로 재사용해 점멸 여부를 판단합니다 — 별도의
-  점멸 전용 상태를 새로 만들지 않고 기존 트래킹 상태에 얹은 구조이므로,
-  트래킹 로직이 바뀌면 점멸 조건도 자동으로 같이 바뀝니다. 점멸을 멈추는
-  것은 마커 본체가 아니라 옆의 작은 "⏹" 아이콘의 역할입니다(`blink_stopped_{cid}`).
+- **카메라 개수/이름의 단일 출처**: 설정 페이지에서 지도에 클릭으로 찍은
+  초소 개수로 결정됩니다(§3). 관련 상태 관리는 전부 `services/outposts.py`에
+  있고, `services/camera_registry.py`가 이를 나머지 시스템이 쓰는 카메라
+  목록 형태로 변환합니다. 지도 "이미지"만 고정(`config.PRESET_MAP_IMAGE_PATH`)
+  이고, 마커 "위치"는 세션마다 관리자가 직접 만드는 동적 상태입니다.
+- **EO 영상 업로드 = 설정 페이지, 재생 시작 = 대시보드 자동 반영**: 관리자가
+  `ui/outposts/editor.py`에서 초소별로 EO 영상을 매핑(`services/outposts.
+  set_marker_video(marker_id, "eo", ...)`)해두면, 그 즉시 재생을 시작하는
+  것이 아니라 재생 상태만 정리(`reset_cam_state`)해둡니다. 실제
+  `cv2.VideoCapture` 오픈과 재생 시작은 `services/camera_registry.
+  get_active_cameras()`가 대시보드 진입 시(또는 다른 페이지에 있어도
+  app.py가 매 실행마다 카메라 목록을 계산하므로 그 즉시)
+  `services/playback.start_camera_media()`를 호출해 수행합니다 —
+  `ui/camera/card.py`는 이 결과 상태만 그립니다. TIR 영상은 같은 방식으로
+  매핑되지만 `reset_cam_state`를 호출하지 않고 재생 파이프라인에도 연결되어
+  있지 않습니다 — 매핑 정보만 저장해두는 상태이며, 실제 이중 스트림 추론을
+  붙일 때 확장하면 됩니다.
+- **마커 클릭 = 화면마다 다른 의미**: 대시보드 "관제 지도" 탭에서는 마커
+  자체가 클릭 가능한 버튼이라(`ui/outposts/marker_overlay.render_marker`)
+  클릭하면 바로 선택이 토글됩니다. 설정 페이지 지도는 클릭이 "새 마커
+  추가"로 쓰이고 있어서(§3.1), 선택/해제는 대신 목록의 🔵/🔴 버튼이
+  `toggle_selection()`을 직접 호출하는 방식입니다. 두 경로 모두 결국 같은
+  `toggle_selection()` 함수를 거치므로 결과 상태(§3.2의 세 가지 갱신)는
+  동일합니다. `services/tracking.py`가 관리하는 `person_tracks_{cid}`
+  (카메라별 현재 추적 중인 사람 트랙)를 그대로 재사용해 점멸 여부를
+  판단합니다(관제 지도 탭에서만) — 별도의 점멸 전용 상태를 새로 만들지
+  않고 기존 트래킹 상태에 얹은 구조이므로, 트래킹 로직이 바뀌면 점멸
+  조건도 자동으로 같이 바뀝니다. 점멸을 멈추는 것은 마커 본체가 아니라
+  옆의 작은 "⏹" 아이콘의 역할입니다
+  (`blink_stopped_{cid}`).
 - **"관제 지도" 탭이 카메라 카드를 재사용하지 않는 이유**: §4 참고 — Streamlit
   탭은 보이지 않는 탭의 코드도 함께 실행하므로, 인터랙티브 카드를 두 탭에
   중복 배치하면 위젯 key 충돌이 발생합니다.
-- **영상 반복 재생**: 업로드한 영상이 끝에 도달하면 `services/playback.py`가
+- **영상 반복 재생**: 매핑한 영상이 끝에 도달하면 `services/playback.py`가
   자동으로 처음으로 되돌려 계속 재생합니다(24시간 CCTV 시뮬레이션). 현재
   일시정지/재개 버튼은 테스트 중 로그가 계속 쌓이는 것을 막기 위한 임시
   기능으로, `ui/camera/card.py`에 `TODO(임시/테스트용)` 주석으로 표시되어

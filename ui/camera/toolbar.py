@@ -1,54 +1,45 @@
 """
-ui/camera/toolbar.py — 대시보드 카메라 제어 위젯 모음 (사이드바 렌더링)
+ui/camera/toolbar.py — '실시간 감시' 페이지 상단 헤더(날짜+시각) + 구역 전환 상태 동기화
 
-제목과 구역 선택 드롭다운을 사이드바에 순서대로 조립합니다. CCTV 화면이
-메인 영역 최상단에 붙을 수 있도록 메인 영역에는 아무것도 그리지 않습니다.
-views/dashboard.py는 render_dashboard_header() 하나만 호출하면 됩니다
-(대시보드 페이지가 활성화되어 있을 때만 사이드바에 이 위젯들이 나타남).
-
-과거에는 "카메라 개수" +/- 스텝퍼가 여기 있었지만, 이제 카메라 개수는 설정
-페이지에서 지도에 마킹한 초소 개수로 자동 결정되므로(services/outposts.py)
-제거되었습니다.
+과거에는 "라이브 카메라 피드" 제목과 "구역 선택" 드롭다운이 사이드바에
+있었지만, 이제 화면 전환(그리드 ↔ 특정 카메라 스포트라이트)은 각 카메라
+카드 상단 오버레이 바의 버튼(ui/camera/card.py의 ⛶/▦/↺)으로 직접 이뤄지므로
+드롭다운이 필요 없어졌습니다. 카메라 개수도 더 이상 이 화면에서 조절하지
+않고, 설정 페이지의 초소 마킹 개수로 자동 결정됩니다. 그래서 이 파일에
+남은 위젯은 실시간 시계(날짜+시각) 하나뿐입니다 — 예전에는 사이드바에
+있었지만, 이제 '실시간 감시' 페이지 본문 상단(헤더 행 우측)에 표시됩니다.
 """
+from datetime import datetime
+
 import streamlit as st
+
+from ui.styles import CLOCK_DATE_STYLE, CLOCK_PERIOD_STYLE, CLOCK_TIME_STYLE
+
+_WEEKDAY_KO = ["월", "화", "수", "목", "금", "토", "일"]
 
 
 def consume_pending_camera_switch() -> None:
-    """예약된 구역 전환 요청을 드롭다운 위젯이 그려지기 전에 반영합니다."""
+    """예약된 구역 전환 요청(_pending_selected_cam)을 카드가 그려지기 전에
+    반영합니다. 사람 탐지 시 자동 스포트라이트 전환(services/playback.py)과
+    카드의 ⛶ 버튼(수동 전환)이 공통으로 이 예약 큐를 사용합니다."""
     ss = st.session_state
     pending = ss.pop("_pending_selected_cam", None)
     if pending is not None:
         ss["selected_cam"] = pending
-        ss["_selected_cam_widget"] = pending  # 위젯이 이미 그려진 뒤엔 index/value가 무시되므로 key값을 직접 맞춰둠
 
 
-def _sync_selected_cam() -> None:
-    """드롭다운의 변경값을 실제 상태 키(selected_cam)로 복사.
-    카메라 제목 버튼(ui/camera/card.py)도 이 실제 키를 직접 읽고 씁니다."""
-    st.session_state["selected_cam"] = st.session_state["_selected_cam_widget"]
-
-
-def render_dashboard_header(valid_options: list[str]) -> bool:
-    """대시보드 사이드바 컨트롤(제목 + 구역 선택)을 렌더링하고, 현재 '전체 구역'
-    (그리드) 모드인지 여부를 반환합니다.
-    (기존에는 메인 영역 상단 3분할 헤더였으나, CCTV 화면을 최상단에 붙이기
-    위해 사이드바로 이동 — 함수명/시그니처/반환값은 그대로 유지합니다.)
-
-    권한별 노출 범위: 구역 선택은 admin/user 공통입니다. 카메라 개수는 더 이상
-    이 화면에서 조절하지 않고, 설정 페이지의 초소 마킹 개수로 자동 결정됩니다."""
-    ss = st.session_state
-    is_grid_mode = ss["selected_cam"] == "전체 구역"
-
-    st.sidebar.markdown("**라이브 카메라 피드**")
-
-    current = ss.get("selected_cam", "전체 구역")
-    st.sidebar.selectbox(
-        "구역 선택",
-        options=valid_options,
-        index=valid_options.index(current) if current in valid_options else 0,
-        key="_selected_cam_widget",
-        on_change=_sync_selected_cam,
-        label_visibility="visible",
+@st.fragment(run_every=1)
+def render_header_clock() -> None:
+    """'실시간 감시' 페이지 헤더 행 우측에 표시되는 날짜+시각 — 1초마다
+    이 부분만 독립적으로 재실행되어 갱신됩니다 (fragment 덕분에 카메라
+    카드 등 나머지 화면은 영향받지 않음)."""
+    now = datetime.now()
+    weekday = _WEEKDAY_KO[now.weekday()]
+    st.markdown(
+        f"<div style='text-align:right; line-height:1.5;'>"
+        f"<div style='{CLOCK_DATE_STYLE}'>{now.strftime('%Y.%m.%d')} ({weekday})</div>"
+        f"<span style='{CLOCK_PERIOD_STYLE}'>{'오전' if now.hour < 12 else '오후'}</span> "
+        f"<span style='{CLOCK_TIME_STYLE}'>{now.strftime('%I:%M:%S')}</span>"
+        f"</div>",
+        unsafe_allow_html=True,
     )
-
-    return is_grid_mode

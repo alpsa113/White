@@ -9,32 +9,29 @@ import streamlit.components.v1 as components
 
 
 # ------------------------------------------------------------------ #
-# 오버레이 아이콘 스타일 — ui/camera/card.py가 카메라별로 {cid}만 채워 사용
+# img_wrap 위치 기준 스타일 — ui/camera/card.py가 카메라별로 {cid}만 채워 사용.
+# 오버레이 아이콘(⛶/↺) 및 상단 바 스타일은 ui/camera/card.py의
+# TOPBAR_CSS_TEMPLATE으로 이동했습니다 — 이 파일은 확대/이동(zoom) 기능
+# 자체에만 집중합니다.
+#
+# overflow:hidden이 중요합니다 — 상단 오버레이 바는 position:absolute라
+# 카드 폭이 좁을 때(가로 스크롤 썸네일 등) 내용이 넘칠 수 있는데, 이 규칙이
+# 없으면 넘친 부분이 옆 카드 위로 그대로 번져 보이는 문제가 생깁니다.
+#
+# container-type: inline-size — 이 카드 자신의 가로폭을 기준으로 하는
+# "컨테이너 쿼리" 단위(cqw)의 기준점을 여기 선언합니다. 오버레이 바
+# (TOPBAR_CSS_TEMPLATE)가 이 기준으로 폰트/패딩 크기를 정해서, 카드 폭이
+# 달라지면(그리드 칸 개수, 가로 스크롤 카드 등) 배지 크기도 함께 비례해서
+# 커지거나 작아집니다 — 고정 px였을 때 좁은 카드에서 버튼끼리 겹치던
+# 문제의 근본 해결책입니다.
 # ------------------------------------------------------------------ #
-ZOOM_OVERLAY_CSS_TEMPLATE = """
+IMG_WRAP_CSS_TEMPLATE = """
 <style>
-div[class*="st-key-img_wrap_{cid}"] {{ position: relative; }}
-div[class*="st-key-expand_overlay_{cid}"] {{
-    position: absolute;
-    top: 8px;
-    right: 8px;
-    z-index: 10;
-    width: auto !important;
-}}
-div[class*="st-key-expand_overlay_{cid}"] button {{
-    padding: 4px 10px;
-    opacity: 0.85;
-}}
-div[class*="st-key-reset_overlay_{cid}"] {{
-    position: absolute;
-    top: 8px;
-    right: 8px;
-    z-index: 10;
-    width: auto !important;
-}}
-div[class*="st-key-reset_overlay_{cid}"] button {{
-    padding: 4px 10px;
-    opacity: 0.85;
+div[class*="st-key-img_wrap_{cid}"] {{
+    position: relative;
+    overflow: hidden;
+    border-radius: 4px;
+    container-type: inline-size;
 }}
 </style>
 """

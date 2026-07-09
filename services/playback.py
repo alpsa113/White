@@ -7,7 +7,9 @@ run_playback_loop(): 여러 카메라의 영상을 하나의 반복문 안에서
                     (services/clip_recorder.py)를 호출합니다. 실제 인코딩·
                     업로드 로직은 clip_recorder.py에 위임되어 있습니다.
 """
+import io
 import os
+import tempfile
 import time
 
 import streamlit as st
@@ -20,7 +22,7 @@ try:
 except ImportError:
     HAS_CV2 = False
 
-from config import DETECT_EVERY_SECONDS
+from config import DETECT_EVERY_SECONDS, IMAGE_EXTS, VIDEO_EXTS
 from services.detection import draw_boxes
 from services.tracking import process_frame
 from services.clip_recorder import push_frame_buffer, start_pending_clips, append_pending_clips
@@ -48,6 +50,67 @@ def reset_cam_state(cid: str):
               "fps", "play_start_wall", "play_start_frame", "last_detect_time", "progress",
               "frame_buffer", "pending_clips"):
         st.session_state.pop(f"{k}_{cid}", None)
+
+
+# ------------------------------------------------------------------ #
+# 미디어 반영 (설정 페이지의 사전 업로드 + 카메라 최초 로딩 시 자동 반영 공용)
+# ------------------------------------------------------------------ #
+def start_camera_media(cam: dict, data: bytes, filename: str) -> str:
+    """카메라 채널(cam)에 미디어 바이트(data)를 반영합니다 — 영상이면 재생을
+    시작하고, 이미지면 1회 분석 결과를 저장합니다.
+
+    설정 페이지에서 초소에 영상을 매핑할 때(services/outposts.set_marker_video)와,
+    대시보드 진입 시 그 매핑을 카메라에 자동으로 반영할 때(services/camera_registry.
+    get_active_cameras) 양쪽에서 공용으로 사용됩니다 — 기존 ui/camera/card.py의
+    자체 업로드 버튼이 하던 일을 대체합니다.
+
+    이 함수는 st.rerun()을 직접 호출하지 않습니다 — 호출부가 언제 다시 그릴지를
+    결정합니다(예: 설정 페이지 저장 버튼은 저장 후 한 번만, 카메라 목록 계산 시
+    자동 반영은 같은 스크립트 실행 안에서 바로 이어서 그려지므로 별도 rerun 불필요).
+
+    반환값: "video" | "image" | "unchanged" | "unsupported" | "no_cv2"
+    """
+    ss = st.session_state
+    cid = cam["id"]
+
+    # 파일명+크기 조합으로 "이미 반영된 미디어인지"를 판별 — 동일하면 재처리하지 않음
+    fp = (filename, len(data))
+    if ss.get(f"fp_{cid}") == fp:
+        return "unchanged"
+
+    reset_cam_state(cid)
+    ss[f"fp_{cid}"] = fp
+    ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
+
+    if ext in VIDEO_EXTS:
+        if not HAS_CV2:
+            return "no_cv2"
+        # cv2.VideoCapture는 파일 경로가 필요하므로, 바이트를 임시파일로 먼저
+        # 저장한 뒤 그 경로를 열어 재생을 시작합니다.
+        with tempfile.NamedTemporaryFile(suffix="." + ext, delete=False) as tmp:
+            tmp.write(data)
+            ss[f"tmp_path_{cid}"] = tmp.name
+
+        cap = cv2.VideoCapture(ss[f"tmp_path_{cid}"])
+        ss[f"cap_{cid}"] = cap
+        ss[f"total_frames_{cid}"] = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        # 영상 자체의 FPS를 읽어서 재생 속도를 실제 영상 속도에 맞춥니다.
+        # 일부 영상은 FPS 값을 못 읽어오는 경우가 있어 0 이하면 30fps로 대체합니다.
+        fps = cap.get(cv2.CAP_PROP_FPS)
+        ss[f"fps_{cid}"] = fps if fps and fps > 0 else 30.0
+        ss[f"cursor_{cid}"] = 0
+        ss[f"playing_{cid}"] = True
+        ss[f"finished_{cid}"] = False
+        return "video"
+
+    elif ext in IMAGE_EXTS:
+        image = Image.open(io.BytesIO(data)).convert("RGB")
+        dets, _, _ = process_frame(cam, image, "이미지", single=True)
+        ss[f"result_{cid}"] = draw_boxes(image, dets)
+        return "image"
+
+    else:
+        return "unsupported"
 
 
 # ------------------------------------------------------------------ #

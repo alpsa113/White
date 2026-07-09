@@ -10,22 +10,45 @@ import math
 import streamlit as st
 
 from config import build_camera_list
-from services.playback import reset_cam_state
+from services.playback import reset_cam_state, start_camera_media
 from services.outposts import get_outposts, to_camera_list
 
 
 def get_active_cameras() -> list[dict]:
-    """설정 페이지에서 지도에 마킹한 초소(services/outposts.py) 목록을 카메라
-    목록으로 변환해 반환합니다. 관리자가 아직 초소를 하나도 마킹하지 않은
-    초기 상태에서는 화면이 완전히 비어 보이지 않도록 기본 카메라 1개로
+    """설정 페이지에서 지도에 찍은 초소(services/outposts.py) 목록을 카메라
+    목록으로 변환해 반환합니다. 관리자가 아직 초소를 하나도 찍지 않은 초기
+    상태에서는 화면이 완전히 비어 보이지 않도록 기본 카메라 1개로
     폴백합니다 (build_camera_list(1)).
 
-    이전에는 session_state.grid_count(+/- 스텝퍼)로 개수를 정했지만, 이제는
-    초소 마커 개수가 곧 카메라 개수이므로 그 스텝퍼는 제거되었습니다."""
+    카메라 개수/이름은 이 함수로 직접 조절하지 않고, 설정 페이지에서 지도에
+    찍은 초소(마커) 개수로 자동 결정됩니다."""
     outposts = get_outposts()
     cameras = to_camera_list(outposts) if outposts else build_camera_list(1)
     _cleanup_removed_cameras(cameras)
+    _sync_preset_media(outposts, cameras)
     return cameras
+
+
+def _sync_preset_media(outposts: list[dict], cameras: list[dict]) -> None:
+    """설정 페이지에서 초소에 매핑해둔 영상을, 아직 반영되지 않은 카메라
+    채널에 자동으로 반영합니다 (ui/camera/card.py의 자체 업로드 버튼을
+    대체). 어느 채널(EO/TIR)을 반영할지는 session_state.active_channel_{cid}
+    를 따르며, 아직 카드에서 전환한 적이 없으면 기본값인 EO를 사용합니다.
+    이미 반영된 채널(fp_{cid} 존재 — 카드의 EO/TIR 수동 전환 포함)은 매
+    실행마다 재초기화되지 않도록 건너뜁니다."""
+    ss = st.session_state
+    cam_by_id = {c["id"]: c for c in cameras}
+    for o in outposts:
+        cid = o["id"]
+        if ss.get(f"fp_{cid}") is not None:
+            continue
+        channel = ss.get(f"active_channel_{cid}", "eo")
+        data = o.get(f"video_{channel}_bytes")
+        if not data:
+            continue
+        cam = cam_by_id.get(cid)
+        if cam:
+            start_camera_media(cam, data, o.get(f"video_{channel}_name") or "preset")
 
 
 def _cleanup_removed_cameras(cameras: list[dict]) -> None:

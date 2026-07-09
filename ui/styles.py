@@ -19,10 +19,8 @@ div[data-testid="stButton"] > button p {
 # 상단 브랜드명("GOP 통합 감시 시스템") 스타일
 BRAND_TITLE_STYLE = "font-size:1.3rem; font-weight:700; margin-bottom:0.8rem;"
 
-# RDS/S3 연결 상태뱃지 스타일 (사이드바 배치 — 좌측 정렬)
-STATUS_BADGE_STYLE = "text-align:left; font-size:0.85rem; color:gray; white-space:nowrap;"
-
-# 실시간 시계 — 라벨은 작게, 오전/오후는 중간 크기, 시:분:초는 크고 굵게 표시해 강조 차등을 둠
-CLOCK_LABEL_STYLE = "font-size:0.9rem; color:gray;"
+# 실시간 시계 — '실시간 감시' 페이지 상단 헤더에 표시 (ui/camera/toolbar.py).
+# 날짜는 작게, 오전/오후는 중간 크기, 시:분:초는 크고 굵게 표시해 강조 차등을 둠
+CLOCK_DATE_STYLE = "font-size:0.85rem; color:gray;"
 CLOCK_PERIOD_STYLE = "font-size:1.2rem; font-weight:500;"
 CLOCK_TIME_STYLE = "font-size:1.6rem; font-weight:600;"

@@ -36,11 +36,13 @@ def init_session_state() -> None:
     ss.setdefault("selected_cam", "전체 구역")  # "전체 구역" → 그리드 보기 / 특정 카메라명 → 집중 보기
 
     # ── 초소(지도 마커) 설정 ──
-    # 카메라 개수/이름은 더 이상 스텝퍼가 아니라 설정 페이지에서 지도에 마킹한
-    # 초소 개수로 자동 결정됩니다. 상세 스키마는 services/outposts.py 참고.
-    ss.setdefault("outposts", [])                    # [{"id","cctv_no","info","source","x_ratio","y_ratio"}, ...]
-    ss.setdefault("_outpost_id_counter", 0)           # 마커 삭제 후에도 id가 재사용되지 않도록 하는 증가 카운터
-    ss.setdefault("_outpost_map_image_bytes", None)   # 업로드된 지도 원본 이미지 (PNG/JPEG 바이트)
+    # 지도 "이미지"는 config.PRESET_MAP_IMAGE_PATH에 고정되어 있지만, 그 위의
+    # 초소(마커) "위치"는 관리자가 설정 페이지에서 직접 클릭해 찍고 지울 수
+    # 있습니다 — 상세 스키마/CRUD는 services/outposts.py 참고.
+    ss.setdefault("outposts", [])                     # [{"id","info","source","x_ratio","y_ratio","video_eo_bytes","video_eo_name","video_tir_bytes","video_tir_name"}, ...]
+    ss.setdefault("_outpost_id_counter", 0)            # 마커 삭제 후에도 id가 재사용되지 않도록 하는 증가 카운터
+    ss.setdefault("_outpost_map_image_bytes", None)    # 프리셋 지도 이미지 바이트 (디스크에서 최초 1회만 읽어 캐시)
+    ss.setdefault("_map_selected_cam_ids", [])         # "CCTV 화면 보기"로 선택된 초소 id 목록 — 설정 페이지 지도·관제 지도 탭·카메라 화면 탭이 공유
 
     _sync_db_and_s3()
 
@@ -49,7 +51,9 @@ def _sync_db_and_s3() -> None:
     """DB/S3 연결 가능 여부를 확인하고, 최초 1회만 과거 로그를 메모리로 적재합니다."""
     ss = st.session_state
 
-    # 앱이 리런될 때마다 연결 가능 여부를 다시 확인하여 상단 상태뱃지가 항상 최신 상태를 반영하도록 함
+    # 앱이 리런될 때마다 연결 가능 여부를 다시 확인 — DB_ENABLED/S3_ENABLED는
+    # 사이드바에 뱃지로 표시되진 않지만, 로그 저장/클립 업로드 등에서 메모리
+    # 폴백 여부를 판단하는 데 여전히 쓰입니다.
     ss["DB_ENABLED"] = db.init_db()
     ss["S3_ENABLED"] = s3.is_enabled()   # secrets.toml에 [s3] 설정이 채워져 있으면 True
     ss.setdefault("db_loaded", False)    # 과거 로그를 이미 한 번 불러왔는지 여부 (중복 로딩 방지)

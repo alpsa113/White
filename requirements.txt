@@ -19,10 +19,11 @@ pandas
 numpy
 opencv-python
 
-# ── 설정 페이지: 지도 위 초소 위치 마킹 ──
-# 업로드한 지도 이미지를 클릭하면 클릭 좌표(px)를 돌려주는 컴포넌트.
+# ── 설정 페이지: 지도 위 초소 위치 클릭 마킹 ──
+# 지도를 클릭하면 클릭 좌표(px)를 돌려주는 컴포넌트.
 # services/outposts.py가 이 좌표를 0~1 비율로 정규화해 저장합니다.
 streamlit-image-coordinates
+
 
 # ── 탐지 전후 클립(mp4) 인코딩 ──
 # imageio-ffmpeg는 플랫폼별 ffmpeg 실행파일을 패키지 안에 내장하고 있어
