@@ -75,10 +75,15 @@ def build_val_loader(
     batch_size: int,
     num_workers: int,
     img_size: int,
+    val_manifest: str | None = None,
 ) -> DataLoader:
     val_cfgs = phase_yaml.get("val_datasets", [])
     if not val_cfgs:
         raise ValueError("phase 설정에 val_datasets 항목이 없습니다.")
+    if val_manifest:
+        base_cfg = dict(val_cfgs[0])
+        base_cfg["ann_file"] = val_manifest
+        val_cfgs = [base_cfg]
 
     small_box_area = phase_yaml.get("hard_negative_sampling", {}).get(
         "small_box_area", 32 * 32
@@ -263,6 +268,7 @@ def evaluate(args: argparse.Namespace) -> None:
         batch_size=args.batch,
         num_workers=args.num_workers,
         img_size=img_size,
+        val_manifest=args.val_manifest,
     )
     metric = MeanAveragePrecision(
         num_classes=len(CLASS_NAMES),
@@ -338,6 +344,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--phase", type=int, choices=[1, 2, 3], required=True)
     parser.add_argument("--model-cfg", default="configs/model.yaml")
     parser.add_argument("--phase-cfg", default="configs/phases.yaml")
+    parser.add_argument(
+        "--val-manifest",
+        default=None,
+        help="phase 설정의 val_datasets 대신 사용할 검증 manifest",
+    )
     parser.add_argument(
         "--output-dir",
         default=None,
