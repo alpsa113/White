@@ -1,11 +1,4 @@
-"""
-services/log_management.py — 로그 편집/삭제 저장 처리
-
-감지 기록 화면의 data_editor에서 수정된 내용을 원본(df_edit_orig)과
-비교하여 실제로 변경된 부분만 session_state·RDS·S3에 반영합니다.
-UI(ui/log_tabs.py)는 이 모듈이 반환한 결과 딕셔너리를 화면에 표시만 하고,
-DB/S3 관련 판단과 처리는 전부 이 모듈이 담당합니다.
-"""
+"""services/log_management.py — 로그 편집/삭제 저장 처리. 원본과 비교해 변경분만 반영합니다."""
 import pandas as pd
 import streamlit as st
 
@@ -14,7 +7,7 @@ import s3_storage as s3
 
 
 def _safe_int(val):
-    """탐지 ID를 안전하게 int로 변환합니다. NaN/None 등 변환 불가한 값은 None을 반환합니다."""
+    """값을 안전하게 int로 변환합니다. 실패하면 None."""
     try:
         return int(val) if val is not None and not pd.isna(val) else None
     except (ValueError, TypeError):
@@ -22,11 +15,7 @@ def _safe_int(val):
 
 
 def save_log_edits(df_edit_orig: pd.DataFrame, edited_df: pd.DataFrame) -> dict:
-    """편집 탭에서 '변경사항 저장' 클릭 시 호출됩니다.
-
-    삭제된 행 판별 방법: 휴지통으로 삭제된 행은 edited_df에서 사라지므로,
-    원본 ID 집합에서 현재(수정 후) ID 집합을 빼면 삭제된 ID만 남습니다.
-    수정된 행 판별 방법: 각 행을 원본과 컬럼별로 비교하여 하나라도 다르면 갱신 대상으로 처리합니다.
+    """편집 탭 저장 시 변경/삭제된 행만 session_state·RDS·S3에 반영합니다.
 
     Returns:
         dict: {"updated_count": int, "removed_ids": list[int], "rds_errors": list[str]}
@@ -46,10 +35,8 @@ def save_log_edits(df_edit_orig: pd.DataFrame, edited_df: pd.DataFrame) -> dict:
     }
     removed_ids = list(orig_id_set - remaining_id_set)
 
-    # ── 수정 처리: edited_df에 남아 있는 행만 순회 ──
     for _, row in edited_df.iterrows():
         rid = _safe_int(row.get("탐지 ID"))
-        # 원본에 없는 ID(예: 사용자가 새로 추가한 빈 행)는 저장 대상에서 제외
         if rid is None or rid not in orig_id_set:
             continue
 
@@ -58,7 +45,6 @@ def save_log_edits(df_edit_orig: pd.DataFrame, edited_df: pd.DataFrame) -> dict:
             continue
         orig = orig_rows.iloc[0]
 
-        # 편집 가능한 컬럼들 중 하나라도 값이 달라졌으면 갱신 대상으로 판단
         changed = any(
             str(row[col]) != str(orig[col])
             for col in [
@@ -69,7 +55,6 @@ def save_log_edits(df_edit_orig: pd.DataFrame, edited_df: pd.DataFrame) -> dict:
         if not changed:
             continue
 
-        # 메모리(session_state)의 실제 로그 레코드를 찾아 갱신
         for a in ss.detection_logs:
             if a.get("id") != rid:
                 continue
@@ -87,7 +72,6 @@ def save_log_edits(df_edit_orig: pd.DataFrame, edited_df: pd.DataFrame) -> dict:
             updated_count += 1
             break
 
-    # ── 삭제 일괄 처리: RDS/S3/메모리 세 곳 모두에서 제거 ──
     if removed_ids:
         removed_keys = [
             a.get("uri", a.get("image_path", ""))

@@ -1,15 +1,4 @@
-"""
-ui/camera/detection_panel.py — '실시간 감시' 화면 맨 오른쪽 객체 탐지 이력 패널
-
-그리드 모드/스포트라이트 모드 둘 다에서 동일하게 재사용되는 패널입니다
-(views/dashboard.py가 두 모드를 감싸는 우측 컬럼에서 이 함수 하나만 호출).
-데이터 출처는 session_state.detection_logs(services/alerts.py가 채워 넣는
-전체 탐지 이력)를 그대로 재사용하며, 이 파일은 새로운 데이터 구조를 만들지
-않고 화면 표시(아이콘/카드/강조 테두리)만 담당합니다.
-
-아이콘은 매 요청마다 디스크에서 다시 읽지 않도록 base64 인코딩 결과를
-st.cache_data로 캐시합니다.
-"""
+"""ui/camera/detection_panel.py — '실시간 감시' 화면 우측 객체 탐지 이력 패널."""
 import base64
 from pathlib import Path
 
@@ -20,9 +9,7 @@ from utils.formatters import fmt_dt
 
 ICON_DIR = Path(__file__).resolve().parents[2] / "icons"
 
-# 탐지 클래스명 → icons/ 폴더 파일명. db_rds.CLASS_ID_MAP은 소형동물을
-# "small_animal"로 쓰지만, 아이콘 파일명은 "small_object.png"라 여기서는
-# 화면 표시용으로 별도 매핑합니다.
+# 탐지 클래스명 → icons/ 파일명
 CLASS_ICON_FILES = {
     "사람": "person.png",
     "멧돼지": "boar.png",
@@ -36,8 +23,7 @@ MAX_ITEMS = 50
 
 @st.cache_data
 def _icon_b64(class_name: str) -> str:
-    """클래스 아이콘 파일을 base64 문자열로 읽어옵니다. 파일이 없으면 빈 문자열
-    (카드에서 아이콘 자리만 비워두고 텍스트는 그대로 표시)."""
+    """클래스 아이콘 파일을 base64 문자열로 읽어옵니다. 없으면 빈 문자열."""
     filename = CLASS_ICON_FILES.get(class_name)
     if not filename:
         return ""
@@ -89,14 +75,7 @@ def _render_card(a: dict) -> str:
 
 
 def render_detection_panel() -> None:
-    """맨 오른쪽 객체 탐지 이력 패널. 그리드/스포트라이트 두 레이아웃 모두에서
-    dashboard.py가 우측 컬럼에서 이 함수 하나만 호출하면 됩니다.
-
-    session_state.detection_logs에는 RDS의 과거 이력까지 전부 들어있지만
-    (state.py — '감지 기록' 페이지가 그 전체를 조회/편집해야 하므로), 이
-    패널은 "방금 무슨 일이 있었는지"를 보여주는 자리이므로 워터마크
-    (_session_start_max_id, 세션 시작 시점의 최대 id) 보다 id가 큰, 즉
-    이번 실행 중 새로 생긴 탐지만 걸러서 보여줍니다."""
+    """우측 탐지 이력 패널. 이번 세션에서 새로 생긴 탐지만(워터마크 이후 id) 보여줍니다."""
     st.markdown("**탐지 이력**")
 
     ss = st.session_state

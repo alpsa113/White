@@ -1,11 +1,4 @@
-"""
-ui/log_tabs.py — 감지 기록 페이지의 두 탭(조회 / 편집) 렌더링
-
-탭1(render_view_tab)은 표 + 선택한 행의 탐지 이미지를 보여주는 조회 전용 화면이고,
-탭2(render_manage_tab)는 st.data_editor 기반으로 실제 수정/삭제가 가능한 편집 화면입니다.
-저장 로직 자체는 services/log_management.py에 위임하고, 이 파일은 화면 구성과
-사용자 입력 수집만 담당합니다.
-"""
+"""ui/log_tabs.py — 감지 기록 페이지의 조회/편집 탭 렌더링. 저장 로직은 services/log_management.py에 위임합니다."""
 import pandas as pd
 import streamlit as st
 
@@ -14,21 +7,18 @@ from config import PERSON_CLASSES
 from services.log_management import save_log_edits
 from utils.formatters import fmt_dt
 
-# 클래스명이 사람인 행을 표에서 눈에 띄게 구분하기 위한 배경색/글자색
-# (ui/camera/detection_panel.py의 사람 강조 색상과 통일)
+# 클래스명이 사람인 행 강조 스타일
 _PERSON_CLASS_BG = "background-color: rgba(248,81,73,0.18);"
 _PERSON_CLASS_STYLE = _PERSON_CLASS_BG + "color: #f85149; font-weight: 700;"
 
 
 def _highlight_person_class(val: str) -> str:
-    """DataFrame.style.map에 넘길 셀 스타일 함수 — '클래스명' 컬럼에서
-    사람 클래스일 때만 배경색/글자색을 강조합니다."""
+    """'클래스명' 컬럼에서 사람 클래스일 때만 배경색/글자색을 강조합니다."""
     return _PERSON_CLASS_STYLE if val in PERSON_CLASSES else ""
 
 
 def _build_view_df(sorted_logs: list[dict]) -> pd.DataFrame:
-    """조회 탭에 표시할 DataFrame을 구성합니다. 정렬은 호출 측(views/logs.py)에서
-    이미 끝난 상태로 넘어오므로, 여기서는 컬럼 매핑/포맷팅만 수행합니다."""
+    """조회 탭 DataFrame을 구성합니다(정렬은 호출 측에서 완료됨)."""
     df_data = []
     for a in sorted_logs:
         df_data.append({
@@ -37,22 +27,19 @@ def _build_view_df(sorted_logs: list[dict]) -> pd.DataFrame:
             "탐지 일시":      fmt_dt(a),
             "클래스명":       a.get("class_name", ""),
             "신뢰도 (Score)": f"{float(a.get('score', a.get('confidence', 0))):.1%}",
-            "이미지 URI":     a.get("uri", a.get("image_path", "")),  # 표에는 안 보이고 이미지 로딩용으로만 사용
+            "이미지 URI":     a.get("uri", a.get("image_path", "")),
         })
     return pd.DataFrame(df_data)
 
 
 def render_view_tab(sorted_logs: list[dict]) -> None:
-    """탭1 — 로그 조회 표 + 선택한 행의 탐지 이미지 뷰어를 좌우로 배치합니다."""
+    """조회 표 + 선택 행의 탐지 이미지 뷰어를 좌우로 배치합니다."""
     ss = st.session_state
     df = _build_view_df(sorted_logs)
 
     view_col, img_col = st.columns([6, 4])
 
     with view_col:
-        # 경로가 긴 이미지 URI는 표에서 숨겨 가독성을 확보 (이미지 열람 자체는 img_col에서 처리)
-        # '클래스명'이 사람인 행은 배경색으로 강조 (Styler는 st.dataframe에서만
-        # 지원되고, 아래 편집 탭의 st.data_editor에서는 지원되지 않음)
         styled_df = df.drop(columns=["이미지 URI"]).style.map(
             _highlight_person_class, subset=["클래스명"]
         )
@@ -67,8 +54,6 @@ def render_view_tab(sorted_logs: list[dict]) -> None:
 
         selected_rows = selection.selection.get("rows", [])
         if selected_rows:
-            # 인덱스가 아니라 탐지 ID를 저장해두는 이유: rerun 후 데이터가 재정렬되어도
-            # ID 기준으로 다시 찾을 수 있어 "범위 초과" 오류를 피할 수 있습니다.
             _sel_idx = selected_rows[0]
             if 0 <= _sel_idx < len(df):
                 ss["selected_log_id"] = df.iloc[_sel_idx]["탐지 ID"]
@@ -82,12 +67,11 @@ def render_view_tab(sorted_logs: list[dict]) -> None:
             st.info("왼쪽 표에서 행을 클릭하면 해당 객체의 탐지 이미지가 표시됩니다.")
             return
 
-        # ID로 직접 로그를 찾으므로, 리스트 순서가 바뀌어도 항상 올바른 레코드를 가리킴
         sel_log = next((a for a in ss.detection_logs if a.get("id") == sel_log_id), None)
 
         if sel_log is None:
             st.warning("선택된 로그를 찾을 수 없습니다.")
-            ss["selected_log_id"] = None  # 삭제 등으로 무효해진 선택은 초기화
+            ss["selected_log_id"] = None
             return
 
         snap = sel_log.get("snapshot")
@@ -103,9 +87,6 @@ def render_view_tab(sorted_logs: list[dict]) -> None:
         st.caption(f"탐지시각: {fmt_dt(sel_log)}")
         st.divider()
 
-        # 표시 우선순위: 탐지 전후 클립(영상)이 준비되어 있으면 그것을 최우선으로 재생하고,
-        # 아직 클립 인코딩 전이면(짧은 시간) 메모리 스냅샷 이미지로 대체 표시하며,
-        # 세션 재시작 등으로 메모리 스냅샷이 없으면 S3에서 이미지를 내려받습니다.
         if content_type == "video/mp4" and ss.get("S3_ENABLED") and image_uri:
             clip_url = s3.get_presigned_url(image_uri)
             if clip_url:
@@ -126,8 +107,7 @@ def render_view_tab(sorted_logs: list[dict]) -> None:
 
 
 def render_manage_tab(sorted_logs: list[dict]) -> None:
-    """탭2 — st.data_editor로 로그를 직접 수정하거나 행을 삭제할 수 있는 관리 화면입니다.
-    실제 저장(DB/S3/메모리 반영)은 이 함수가 아니라 save_log_edits()가 담당합니다."""
+    """st.data_editor로 로그를 수정/삭제하는 관리 화면입니다. 저장은 save_log_edits()가 담당합니다."""
     ss = st.session_state
 
     st.caption(
@@ -136,14 +116,10 @@ def render_manage_tab(sorted_logs: list[dict]) -> None:
         "**변경사항 저장** 버튼을 누르면 수정·삭제가 RDS에 즉시 반영됩니다."
     )
 
-    # ── 편집용 DataFrame 빌드 ──
-    # st.data_editor는 st.dataframe과 달리 pandas Styler(셀 배경색)를 지원하지
-    # 않아 이 탭에서는 사람 탐지 행을 색으로 구분하지 않습니다 — 조회 탭
-    # (_build_view_df)의 실제 셀 배경색 강조만으로 충분하다는 판단입니다.
     df_edit_data = []
     for a in sorted_logs:
         df_edit_data.append({
-            "탐지 ID":    a.get("id"),                                    # PK — 수정 불가
+            "탐지 ID":    a.get("id"),
             "탐지 일시":  fmt_dt(a),
             "카메라":     a.get("camera", ""),
             "클래스명":   a.get("class_name", ""),
@@ -154,12 +130,10 @@ def render_manage_tab(sorted_logs: list[dict]) -> None:
         })
     df_edit_orig = pd.DataFrame(df_edit_data)
 
-    # 클래스명 드롭다운 선택지: 기본 클래스 + 현재 로그에 실제로 존재하는 클래스를 합쳐서 구성
     known_classes = sorted(
         {"사람", "멧돼지", "고라니", "소형동물"} | set(df_edit_orig["클래스명"].dropna().unique())
     )
 
-    # num_rows="dynamic" 옵션이 행 선택 체크박스와 우상단 휴지통(삭제) UI를 함께 활성화합니다.
     edited_df = st.data_editor(
         df_edit_orig,
         use_container_width=True,
@@ -195,7 +169,6 @@ def render_manage_tab(sorted_logs: list[dict]) -> None:
         key="log_editor_manage",
     )
 
-    # ── 저장 버튼 ──
     btn_col, _ = st.columns([2, 8])
     with btn_col:
         save_clicked = st.button(
@@ -205,13 +178,11 @@ def render_manage_tab(sorted_logs: list[dict]) -> None:
     if not save_clicked:
         return
 
-    # 실제 비교/저장 로직은 전부 services 계층에 위임 — 이 함수는 결과만 받아 표시
     result = save_log_edits(df_edit_orig, edited_df)
     updated_count = result["updated_count"]
     removed_ids = result["removed_ids"]
     rds_errors = result["rds_errors"]
 
-    # ── 결과 메시지 ──
     msgs = []
     if removed_ids:
         msgs.append(f"{len(removed_ids)}개 행 삭제")

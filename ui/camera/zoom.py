@@ -1,21 +1,7 @@
-"""
-ui/camera/zoom.py — 카메라 화면 확대/이동(마우스 휠·드래그) 기능
-
-집중 보기(카메라 1개를 크게 본 화면)에서만 활성화됩니다. Streamlit 위젯이 아니라
-브라우저 DOM을 직접 조작하는 순수 HTML/JS라서, 영상 프레임이 계속 갱신되는
-동안에도(fragment 재실행과 무관하게) 확대/이동 상태가 그대로 유지됩니다.
-"""
+"""ui/camera/zoom.py — 카메라 화면 확대/이동(마우스 휠·드래그) 기능. 집중 보기에서만 활성화됩니다."""
 import streamlit.components.v1 as components
 
-
-# ------------------------------------------------------------------ #
-# img_wrap 위치 기준 스타일 — ui/camera/card.py가 카메라별로 {cid}만 채워 사용.
-# 카드 상단 툴바(이름/EO·TIR/⛶·▦·↺)는 더 이상 이 영상 래퍼 안에 겹쳐
-# 그려지지 않고, ui/camera/card.py가 이 래퍼보다 먼저 별도 영역으로 그립니다
-# (TOPBAR_CSS_TEMPLATE) — 이 파일은 확대/이동(zoom) 기능 자체에만 집중합니다.
-#
-# overflow:hidden — 확대(zoom) 상태에서 이미지가 래퍼 밖으로 넘치는 것을 막습니다.
-# ------------------------------------------------------------------ #
+# img_wrap 위치 기준 스타일 — ui/camera/card.py가 {cid}를 채워 사용
 IMG_WRAP_CSS_TEMPLATE = """
 <style>
 div[class*="st-key-img_wrap_{cid}"] {{

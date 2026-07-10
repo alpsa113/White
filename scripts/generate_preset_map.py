@@ -1,10 +1,4 @@
-"""
-scripts/generate_preset_map.py — 설정 페이지용 플레이스홀더 지도 이미지 생성
-
-실제 GOP 관할구역 지도 이미지가 준비되면 assets/gop_preset_map.png 파일을
-그 이미지로 교체하면 됩니다 (config.PRESET_MAP_IMAGE_PATH가 이 경로를 가리킴).
-이 스크립트는 그 전까지 화면 동작을 확인할 수 있도록 임시 지도를 그립니다.
-"""
+"""scripts/generate_preset_map.py — 설정 페이지용 플레이스홀더 지도 이미지(assets/gop_preset_map.png) 생성 스크립트."""
 import math
 import os
 import random
@@ -16,9 +10,7 @@ random.seed(7)
 W, H = 1280, 720
 OUT_PATH = os.path.join(os.path.dirname(__file__), "..", "assets", "gop_preset_map.png")
 
-# ------------------------------------------------------------------ #
-# 배경 — 산악 지형 느낌의 그라디언트
-# ------------------------------------------------------------------ #
+# 배경 그라디언트
 img = Image.new("RGB", (W, H), "#dfe8d8")
 draw = ImageDraw.Draw(img)
 

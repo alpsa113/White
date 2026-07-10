@@ -1,25 +1,4 @@
-"""
-ui/outposts/viewer.py — 관제 지도(초소 마커 + 점멸) 렌더링
-
-과거에는 대시보드에 독립된 "관제 지도" 탭이 있었고, 그 다음에는 헤더
-우측에 잠깐 있었지만, 지금은 '실시간 감시' 페이지 맨 오른쪽 컬럼(객체 탐지
-이력 패널 바로 위, "초소 위치" 문구와 함께)에 미니맵으로 항상 표시됩니다
-(views/dashboard.py 참고) — 모드와 무관하게 "지금 각 카메라가 지도 어디에
-있는지", "다른 곳에서 사람이 탐지되고 있는지"를 항상 볼 수 있도록 하기
-위함입니다.
-
-마커를 클릭하면 여전히 "CCTV 화면 보기" 선택 상태(session_state.
-_map_selected_cam_ids)를 토글합니다 — 이 상태는 설정 페이지의 초소 위치
-지도(ui/outposts/editor.py) 및 '카메라 화면' 탭의 그리드 필터링과
-공유됩니다(ui/outposts/marker_overlay.py, views/dashboard.py). 즉 이
-지도에서 마커를 선택해도 다음 렌더에서 그 카메라들만 그리드로 필터링해
-볼 수 있습니다.
-
-사람이 탐지된 카메라의 마커는 점멸(blink)합니다. 점멸 마커를 클릭하면(=마커
-본체) 선택 토글만 될 뿐 점멸은 멈추지 않습니다 — 점멸을 멈추려면 마커 옆에
-별도로 붙는 작은 "⏹" 정지 아이콘을 클릭해야 합니다. 정지 상태는 추적이
-끊겨(person_tracks가 비어) 자동 해제되면 다음 탐지부터 다시 점멸합니다.
-"""
+"""ui/outposts/viewer.py — 관제 지도(초소 마커 + 점멸) 미니맵 렌더링. 마커 클릭으로 CCTV 화면 보기 선택을 토글합니다."""
 import io
 
 import streamlit as st
@@ -30,20 +9,9 @@ from ui.outposts.marker_overlay import BLINK_CSS, MAP_WRAP_KEY, render_marker, r
 
 
 def render_map(cameras: list[dict]) -> None:
-    """지도 이미지 위에 초소 마커를 겹쳐 그립니다. 마커를 클릭하면 "CCTV 화면
-    보기" 선택 상태가 토글되고(다중 선택 가능), 점멸 중인 마커는 옆에 별도
-    "⏹" 정지 아이콘이 함께 붙습니다.
-
-    지도 래퍼 div는 이미지의 실제 가로:세로 비율에 `aspect-ratio`로 고정됩니다
-    — 마커 좌표(x_ratio/y_ratio)는 이 래퍼의 크기를 기준으로 한 0~1 비율
-    퍼센트 위치이므로, 래퍼가 이미지와 정확히 같은 비율이어야만 마커가 항상
-    이미지 위 정확한 위치에 겹쳐집니다. (예전엔 래퍼 크기가 브라우저가 이미지
-    로딩 후 계산하는 값에 맡겨져 있어, 컬럼 폭이 아주 좁아지는 스포트라이트
-    레이아웃에서 래퍼와 실제 이미지 표시 영역이 어긋나 마커가 이미지 바깥에
-    찍히는 문제가 있었습니다.)"""
+    """지도 이미지 위에 초소 마커를 겹쳐 그립니다. 사람이 탐지된 카메라의 마커는 점멸합니다."""
     ss = st.session_state
 
-    # 삭제된 카메라가 선택 목록에 남아있지 않도록 정리 (마커 삭제 등 예외 상황 대응)
     valid_ids = {c["id"] for c in cameras}
     stale = [cid for cid in ss.get("_map_selected_cam_ids", []) if cid not in valid_ids]
     if stale:
@@ -85,12 +53,10 @@ def render_map(cameras: list[dict]) -> None:
         for i, o in enumerate(outposts):
             cid = o["id"]
             cam_name = cam_name_by_id.get(cid, cid)
-            # 사람 추적 상태는 이제 EO/TIR 채널별로 분리되어 저장됩니다
-            # (services/playback.py — person_tracks_{cid}_eo / _tir). 둘 중
-            # 하나라도 사람을 추적 중이면 마커가 점멸합니다.
-            tracks = ss.get(f"person_tracks_{cid}_eo") or ss.get(f"person_tracks_{cid}_tir")
+            # 사람 추적 상태는 현재 선택된 채널(EO/TIR) 기준
+            active_channel = ss.get(f"active_channel_{cid}", "eo")
+            tracks = ss.get(f"person_tracks_{cid}_{active_channel}")
             is_blinking = bool(tracks) and not ss.get(f"blink_stopped_{cid}", False)
-            # 추적이 끊기면(더 이상 사람이 없으면) 정지 상태를 해제해 다음 탐지 때 다시 점멸하도록 함
             if not tracks:
                 ss.pop(f"blink_stopped_{cid}", None)
 
@@ -98,6 +64,5 @@ def render_map(cameras: list[dict]) -> None:
             render_marker(cid, o["x_ratio"], o["y_ratio"], number=i + 1,
                           selected=is_selected, blinking=is_blinking, label=cam_name)
 
-            # 점멸 중일 때만 별도 정지 아이콘 노출
             if is_blinking:
                 render_stop_icon(cid, label=cam_name)

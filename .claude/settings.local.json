@@ -24,7 +24,20 @@
       "Bash(python -m py_compile services/playback.py)",
       "Bash(python -m py_compile ui/outposts/editor.py views/logs.py services/playback.py)",
       "Bash(python -m py_compile ui/layout.py services/tracking.py)",
-      "Bash(python -m py_compile ui/camera/toolbar.py views/dashboard.py)"
+      "Bash(python -m py_compile ui/camera/toolbar.py views/dashboard.py)",
+      "Bash(python -m py_compile services/camera_registry.py services/outposts.py)",
+      "Bash(python -m py_compile app.py)",
+      "Bash(python -m py_compile ui/outposts/viewer.py)",
+      "Bash(python -m py_compile config.py)",
+      "Bash(python -m py_compile services/playback.py services/clip_recorder.py services/camera_registry.py services/outposts.py services/tracking.py)",
+      "Bash(python -m py_compile services/alerts.py services/detection.py services/audio_alert.py services/log_management.py services/__init__.py)",
+      "Bash(python -m py_compile ui/styles.py ui/layout.py ui/camera/zoom.py ui/camera/toolbar.py ui/camera/grid.py ui/camera/spotlight.py ui/camera/detection_panel.py ui/camera/__init__.py ui/__init__.py)",
+      "Bash(python -m py_compile ui/log_tabs.py ui/outposts/marker_overlay.py ui/outposts/editor.py ui/outposts/viewer.py ui/outposts/__init__.py)",
+      "Bash(python -m py_compile views/dashboard.py views/logs.py views/settings.py views/login.py views/__init__.py)",
+      "Bash(python -m py_compile app.py state.py utils/formatters.py s3_storage.py utils/__init__.py)",
+      "Bash(python -m py_compile db_rds.py backend.py scripts/generate_preset_map.py)",
+      "Bash(xargs python -m py_compile)",
+      "Bash(python -m py_compile config.py services/playback.py services/clip_recorder.py)"
     ]
   }
 }

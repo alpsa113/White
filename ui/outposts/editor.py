@@ -1,35 +1,5 @@
-"""
-ui/outposts/editor.py — 설정 페이지: 초소 위치 지도(클릭 마킹) + 정보/영상 매핑 편집기
-
-지도 "이미지"는 config.PRESET_MAP_IMAGE_PATH에 고정되어 있어 업로드하지
-않습니다. 그 위의 초소(마커) "위치"는 관리자가 지도를 클릭해 직접 찍고
-지울 수 있습니다 — **찍은 마커 개수가 곧 '실시간 감시'의 카메라 개수**입니다
-(services/outposts.py → services/camera_registry.py).
-
-지도 클릭으로 마커를 "추가"하는 것과, 이미 있는 마커를 "선택/해제"하는 것은
-서로 다른 상호작용입니다. `streamlit_image_coordinates`는 이미지 위 클릭을
-가로채 좌표를 돌려주는 컴포넌트라 그 위에 별도의 클릭 가능한 마커 버튼을
-겹쳐 그릴 수 없습니다(클릭 우선순위가 애매해짐). 그래서 지도 미리보기에는
-마커를 색칠된 원(PIL로 그려 넣음, 선택 여부에 따라 하늘색/빨간색)으로만
-표시하고, 실제 선택/해제·삭제·영상 매핑은 그 아래 목록의 버튼으로 합니다.
-
-각 초소 행에서 admin이 할 수 있는 일 (user는 초소 정보 조회만 가능 —
-지도 클릭/영상 업로드/삭제 버튼이 아예 보이지 않습니다):
-  1) "초소 정보" 텍스트 수정 (입력 즉시 자동 저장됩니다)
-  2) CCTV 영상을 EO(가시광)/TIR(열화상) 채널로 각각 매핑(업로드) — 우리
-     탐지 모델이 두 영상을 함께 입력받는 RGB-IR 융합 모델이기 때문입니다.
-     행 너비를 줄이기 위해 팝오버 버튼(🎬) 안에 몰아넣었습니다. 매핑해두면
-     '실시간 감시' 페이지의 카메라 카드가 별도 업로드 없이 바로 재생합니다
-     (기본은 EO 채널 — 카드 상단의 EO/TIR 탭으로 즉석 전환 가능,
-     ui/camera/card.py 참고).
-  3) 마커 삭제 (🗑 버튼) — 그 초소의 재생 리소스도 함께 정리됩니다.
-
-"CCTV 화면 보기" 선택/해제는 이 목록에는 더 이상 버튼이 없습니다 — 대신
-'실시간 감시' 페이지 헤더의 지도 미니맵(ui/outposts/viewer.render_map)에서
-마커를 직접 클릭해 토글합니다. 그 선택 상태(session_state.
-_map_selected_cam_ids)는 미니맵과 '실시간 감시'의 그리드 필터링이 공유합니다
-(ui/outposts/marker_overlay.toggle_selection).
-"""
+"""ui/outposts/editor.py — 설정 페이지: 초소 위치 지도(클릭 마킹) + 정보/영상 매핑 편집기.
+지도 이미지는 고정 파일이며, 그 위의 초소(마커) 위치만 관리자가 클릭으로 찍고 지울 수 있습니다."""
 import io
 
 import streamlit as st
@@ -42,16 +12,10 @@ from ui.outposts.marker_overlay import DEFAULT_COLOR, SELECTED_COLOR, selected_i
 
 
 def _draw_markers(base_img: Image.Image, outposts: list[dict], selected: set) -> Image.Image:
-    """프리셋 지도 이미지 위에 현재 마커들을 번호 매긴 원으로 그려 넣습니다
-    (선택된 마커는 빨간색, 그 외는 하늘색 — §3.1 색상 규칙과 동일). 이 결과
-    이미지는 클릭 좌표 캡처용(streamlit_image_coordinates)으로만 쓰이는
-    미리보기이지, 마커 자체가 클릭 가능한 것은 아닙니다."""
+    """지도 이미지 위에 번호 매긴 원으로 마커를 그려 넣습니다(선택된 마커는 빨간색)."""
     img = base_img.convert("RGB").copy()
     draw = ImageDraw.Draw(img)
     w, h = img.size
-    # '실시간 감시' 미니맵의 CSS 마커(ui/outposts/marker_overlay.py)와 크기 인상이
-    # 비슷하도록 반지름/폰트를 키웠습니다 — 이전 값(반지름 min(w,h)//45, 폰트
-    # 반지름*1.1)은 원 자체는 정원이었지만 숫자에 비해 작아 보이는 문제가 있었습니다.
     radius = max(16, min(w, h) // 32)
     try:
         font = ImageFont.truetype(
@@ -74,13 +38,7 @@ def _draw_markers(base_img: Image.Image, outposts: list[dict], selected: set) ->
 
 
 def _handle_map_click(coords: dict | None) -> None:
-    """지도 클릭 좌표를 새 마커로 추가합니다. 같은 클릭이 재실행마다 중복
-    반영되지 않도록 마지막으로 처리한 좌표와 비교합니다.
-
-    streamlit_image_coordinates가 돌려주는 x/y는 화면에 "실제로 그려진"
-    크기 기준입니다(원본 이미지의 자연 해상도가 아님) — 컴포넌트가 같이
-    돌려주는 width/height(그 순간의 렌더링 크기)로 나눠야 컨테이너 폭이나
-    화면 크기가 달라져도 항상 정확한 0~1 비율 좌표가 나옵니다."""
+    """지도 클릭 좌표를 새 마커로 추가합니다(중복 반영 방지)."""
     ss = st.session_state
     if coords is None:
         return
@@ -101,11 +59,7 @@ def _save_info(cid: str) -> None:
 
 
 def render_outpost_editor() -> None:
-    """설정 페이지 상단에 삽입되는 초소 위치 지도 + 정보/영상 매핑 편집기를 렌더링합니다.
-
-    admin은 마커 추가(지도 클릭)/정보 수정/영상 매핑/선택/삭제를 모두 할 수
-    있고, user는 지도와 초소 정보를 조회만 할 수 있습니다(마커 추가/영상
-    업로드/선택/삭제 버튼이 아예 보이지 않습니다)."""
+    """초소 위치 지도 + 정보/영상 매핑 편집기를 렌더링합니다(user는 조회만 가능)."""
     ss = st.session_state
     is_admin = ss.get("role") == "admin"
 
@@ -131,8 +85,6 @@ def render_outpost_editor() -> None:
             )
             _handle_map_click(coords)
         else:
-            # user는 마커를 추가할 수 없으므로, 클릭을 가로채는 컴포넌트 대신
-            # 순수 읽기 전용 이미지로 보여줍니다.
             st.markdown("**지도 미리보기** (조회 전용)")
             st.image(preview, use_container_width=True)
 
@@ -153,9 +105,7 @@ def render_outpost_editor() -> None:
 
 
 def _render_row_admin(i: int, m: dict, cid: str, cam_name: str) -> None:
-    """admin용 초소 1행 — 정보 수정 + 영상 매핑(EO/TIR) + 삭제. "CCTV 화면
-    보기" 선택/해제는 이 목록이 아니라 '실시간 감시' 헤더 미니맵의 마커
-    클릭으로 합니다(ui/outposts/viewer.render_map)."""
+    """admin용 초소 1행 — 정보 수정 + 영상 매핑(EO/TIR) + 삭제."""
     name_col, info_col, popover_col, delete_col = st.columns(
         [1, 3, 0.6, 0.6]
     )
@@ -205,7 +155,7 @@ def _render_row_admin(i: int, m: dict, cid: str, cam_name: str) -> None:
 
 
 def _render_row_readonly(i: int, m: dict) -> None:
-    """user용 초소 1행 — 정보 조회만 가능(입력/업로드/선택/삭제 버튼 없음)."""
+    """user용 초소 1행 — 정보 조회만 가능."""
     name_col, info_col = st.columns([1, 4])
     with name_col:
         st.markdown(f"**{outposts_service.cctv_no(i)}**")

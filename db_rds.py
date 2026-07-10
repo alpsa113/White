@@ -1,25 +1,10 @@
-"""
-db_rds.py — GOP 탐지 로그 데이터베이스 연동 모듈
-
-탐지 이벤트의 영구 저장을 위해 AWS RDS(MySQL)와 통신합니다.
-추론 작업(jobs), 프레임(frames), 저장소(storage), 탐지 객체(detections)로
-세분화된 관계형 테이블 구조에 맞춰 트랜잭션을 안전하게 관리합니다.
-
-conf_thresh, latency_ms 등 추론 시점에 결정되는 값은 이 모듈이 직접 계산하지 않고,
-프론트엔드가 backend.py의 응답을 그대로 전달해준 값을 받아 저장만 합니다.
-"""
+"""db_rds.py — GOP 탐지 로그 데이터베이스 연동 모듈(AWS RDS/MySQL)."""
 
 import pandas as pd
 import streamlit as st
 from sqlalchemy import text, event
 
-
-# ------------------------------------------------------------------ #
-# 클래스명 ↔ class_id 매핑 (insert_log, update_log 공용)
-# ------------------------------------------------------------------ #
-# 한글(데모 모드 시뮬레이션)과 영어(실제 모델 출력) 라벨을 모두 지원합니다.
-# 정의되지 않은 클래스가 들어오면 기존 클래스(0/1/2/3)와 절대 섞이지 않도록
-# 별도의 UNKNOWN_CLASS_ID로 격리합니다.
+# 클래스명 ↔ class_id 매핑 (한글/영어 라벨 모두 지원)
 UNKNOWN_CLASS_ID = 99
 CLASS_ID_MAP = {
     "사람": 0, "person": 0,
@@ -34,17 +19,13 @@ def resolve_class_id(class_name: str) -> int:
     return CLASS_ID_MAP.get(class_name, CLASS_ID_MAP.get(class_name.lower(), UNKNOWN_CLASS_ID))
 
 
-# ------------------------------------------------------------------ #
-# 데이터베이스 연결 엔진 관리
-# ------------------------------------------------------------------ #
 @st.cache_resource
 def get_engine():
-    """SQLAlchemy 엔진을 생성하고 Streamlit 캐시로 애플리케이션 전반에서 재사용합니다."""
+    """SQLAlchemy 엔진을 생성하고 Streamlit 캐시로 재사용합니다."""
     engine = st.connection("gop_db", type="sql").engine
 
     @event.listens_for(engine, "connect")
     def set_kst_timezone(dbapi_connection, connection_record):
-        # NOW(), CURRENT_TIMESTAMP가 모두 한국 시간 기준으로 계산됩니다.
         cursor = dbapi_connection.cursor()
         cursor.execute("SET time_zone = '+09:00'")
         cursor.close()
@@ -52,17 +33,10 @@ def get_engine():
     return engine
 
 
-# ------------------------------------------------------------------ #
-# 데이터베이스 초기화 및 자동 생성
-# ------------------------------------------------------------------ #
 def init_db() -> bool:
-    """
-    DB 연결 가능 여부를 확인하고, 테이블이 없다면 시스템 구동에 필요한 5개 핵심 테이블을 자동 생성합니다.
-    AWS RDS 등 새 환경에 배포할 때 별도의 SQL 실행 없이 앱 구동만으로 초기 세팅이 완료되도록 돕습니다.
-    탐지 이벤트 발생 시 insert_log()에서 model_versions 행을 1:1로 함께 생성합니다.
-    """
+    """DB 연결을 확인하고, 없으면 필요한 5개 테이블을 자동 생성합니다."""
     setup_queries = [
-        # 1. model_versions — 운영 중인 모델 정보
+        # model_versions
         """
         CREATE TABLE IF NOT EXISTS model_versions (
             id              BIGINT UNSIGNED  NOT NULL AUTO_INCREMENT PRIMARY KEY,
@@ -78,10 +52,7 @@ def init_db() -> bool:
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
         """,
 
-        # 2. inference_jobs — 탐지 작업(현재 구조에서는 탐지 1건) 단위 관리
-        #    camera: 어느 CCTV 채널에서 발생한 작업인지
-        #    remarks: 감지 기록 화면에서 입력하는 비고
-        #    conf_thresh: 해당 작업에 실제 적용된 신뢰도 임계값 (backend.py 응답값을 그대로 기록)
+        # inference_jobs
         """
         CREATE TABLE IF NOT EXISTS inference_jobs (
             id               BIGINT UNSIGNED  NOT NULL AUTO_INCREMENT PRIMARY KEY,
@@ -109,7 +80,7 @@ def init_db() -> bool:
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
         """,
 
-        # 3. storage_objects — 스냅샷 이미지 등 파일 경로 및 메타데이터 관리
+        # storage_objects
         """
         CREATE TABLE IF NOT EXISTS storage_objects (
             id           BIGINT UNSIGNED  NOT NULL AUTO_INCREMENT PRIMARY KEY,
@@ -126,7 +97,7 @@ def init_db() -> bool:
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
         """,
 
-        # 4. inference_frames — 영상 내 특정 프레임의 메타데이터 관리
+        # inference_frames
         """
         CREATE TABLE IF NOT EXISTS inference_frames (
             id           BIGINT UNSIGNED  NOT NULL AUTO_INCREMENT PRIMARY KEY,
@@ -143,7 +114,7 @@ def init_db() -> bool:
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
         """,
 
-        # 5. detections — 개별 탐지 객체의 좌표 및 신뢰도 관리
+        # detections
         """
         CREATE TABLE IF NOT EXISTS detections (
             id         BIGINT UNSIGNED  NOT NULL AUTO_INCREMENT PRIMARY KEY,
@@ -174,18 +145,12 @@ def init_db() -> bool:
                 conn.execute(text(query))
         return True
     except Exception as e:
-        # 권한 문제나 DB 접속 실패 시 에러를 세션에 기록하고 메모리 전용 모드로 작동하게 합니다.
         st.session_state["_db_init_error"] = str(e)
         return False
 
 
-# ------------------------------------------------------------------ #
-# 데이터(로그) 조회 (Read)
-# ------------------------------------------------------------------ #
 def fetch_all_logs() -> list[dict]:
-    """
-    분산된 여러 테이블을 JOIN하여 프론트엔드가 한눈에 보여줄 수 있도록 평탄화된 딕셔너리 리스트를 반환합니다.
-    """
+    """여러 테이블을 JOIN하여 평탄화된 로그 딕셔너리 리스트를 반환합니다."""
     engine = get_engine()
     sql = """
     SELECT
@@ -233,26 +198,13 @@ def fetch_all_logs() -> list[dict]:
     return logs
 
 
-# ------------------------------------------------------------------ #
-# 데이터(로그) 생성 (Create)
-# ------------------------------------------------------------------ #
 def insert_log(rec: dict) -> int:
-    """
-    탐지 이벤트를 관계형 스키마에 맞춰 5개 테이블(model_versions, jobs, storage, frames, detections)에
-    분산 저장합니다. 트랜잭션으로 묶여 있어 중간에 오류가 발생하면 전체가 롤백됩니다.
-
-    rec는 frontend의 create_detection_alert()가 만든 딕셔너리로, image_width/height, timestamp_ms,
-    latency_ms, conf_thresh 등 추론 시점에 결정되는 값들을 이미 담고 있습니다. 이 함수는 그 값을
-    그대로 저장할 뿐, 별도의 기본값 정책을 갖지 않습니다(없으면 컬럼 자체의 DEFAULT가 적용됩니다).
-    """
+    """탐지 이벤트를 5개 테이블(model_versions/jobs/storage/frames/detections)에 트랜잭션으로 분산 저장합니다."""
     engine = get_engine()
     box = rec.get("box", {"x1": 0.0, "y1": 0.0, "x2": 0.0, "y2": 0.0})
-
-    # source(한글)가 아니라 input_type(영문)이 record에 이미 있으면 그 값을 우선 사용합니다.
     input_type = rec.get("input_type") or ("video" if rec.get("source") == "영상" else "image")
 
     with engine.begin() as conn:
-        # 0. model_versions — 탐지 1건당 모델 정보 1행 생성
         sql_model = text("""
             INSERT INTO model_versions (name, checkpoint_path, class_map, notes)
             VALUES ('GOP YOLO (Default)', 'weights/best.pt',
@@ -260,9 +212,6 @@ def insert_log(rec: dict) -> int:
         """)
         model_version_id = conn.execute(sql_model).lastrowid
 
-        # 1. inference_jobs — 작업 단위 메타데이터
-        #    conf_thresh가 전달된 경우(backend 응답 기반)에는 그 값을 그대로 기록하고,
-        #    전달되지 않은 경우(데모 모드 등)에는 컬럼 자체의 DEFAULT를 사용합니다.
         job_params = {
             "model_version_id": model_version_id,
             "camera":     rec.get("camera", ""),
@@ -272,8 +221,6 @@ def insert_log(rec: dict) -> int:
             "latency_sec": float(rec.get("latency_ms", 0.0)) / 1000.0,
         }
 
-        # conf_thresh, nms_thresh 둘 다 전달된 경우에만 SQL에 포함시키고,
-        # 없으면 컬럼 자체의 DEFAULT(0.4500)에 위임합니다.
         extra_cols = []
         extra_vals = []
         if rec.get("conf_thresh") is not None:
@@ -298,7 +245,6 @@ def insert_log(rec: dict) -> int:
         """)
         job_id = conn.execute(sql_job, job_params).lastrowid
 
-        # 2. storage_objects — 스냅샷 이미지가 있을 때만 생성
         uri = rec.get("image_path", "")
         if uri:
             storage_type = 's3' if uri.startswith('detections/') or uri.startswith('s3://') else 'local'
@@ -316,7 +262,6 @@ def insert_log(rec: dict) -> int:
                 "file_size":    rec.get("file_size"),
             })
 
-        # 3. inference_frames — 프레임 메타데이터 (해상도, 타임스탬프, 추론 지연시간)
         frame_idx = int(rec.get("hit_frames", 0)) if input_type == 'video' else 0
         sql_frame = text("""
             INSERT INTO inference_frames
@@ -333,7 +278,6 @@ def insert_log(rec: dict) -> int:
             "latency_ms":   float(rec.get("latency_ms", 0.0)),
         }).lastrowid
 
-        # 4. detections — 탐지 객체 좌표 및 신뢰도
         class_name = rec.get("class_name", "")
         sql_det = text("""
             INSERT INTO detections (job_id, frame_id, class_id, class_name, score, x1, y1, x2, y2)
@@ -354,16 +298,8 @@ def insert_log(rec: dict) -> int:
         return int(res_det.lastrowid)
 
 
-# ------------------------------------------------------------------ #
-# 데이터(로그) 수정 (Update)
-# ------------------------------------------------------------------ #
 def update_log(aid: int, rec: dict) -> None:
-    """
-    탐지 ID(aid) 기준으로 detections와 inference_jobs 테이블을 한 트랜잭션 내에서 갱신합니다.
-
-    - detections: class_name, class_id, score
-    - inference_jobs: camera, input_type, status, remarks
-    """
+    """탐지 ID(aid) 기준으로 detections/inference_jobs 테이블을 한 트랜잭션에서 갱신합니다."""
     engine = get_engine()
 
     class_name = rec.get("class_name", "")
@@ -386,7 +322,6 @@ def update_log(aid: int, rec: dict) -> None:
             {"class_name": class_name, "class_id": class_id, "score": score, "aid": int(aid)},
         )
 
-        # job_id를 알면 직접 업데이트하고, 모르면 detections와의 JOIN으로 간접 업데이트합니다.
         job_id = rec.get("job_id")
         if job_id:
             conn.execute(
@@ -423,15 +358,8 @@ def update_log(aid: int, rec: dict) -> None:
             )
 
 
-# ------------------------------------------------------------------ #
-# 데이터(로그) 일괄 삭제 (Delete)
-# ------------------------------------------------------------------ #
 def delete_logs(ids: list[int]) -> None:
-    """
-    삭제할 탐지 ID에 연결된 최상위 Job을 찾아 삭제합니다.
-    CASCADE 규칙에 따라 연결된 프레임, 스토리지, 탐지 객체가 함께 삭제됩니다.
-    model_versions는 inference_jobs에 ON DELETE RESTRICT가 걸려 있어 jobs 삭제 후 별도 삭제합니다.
-    """
+    """탐지 ID에 연결된 Job을 삭제합니다(CASCADE로 프레임/스토리지/탐지도 함께 삭제)."""
     if not ids:
         return
     engine = get_engine()
@@ -457,14 +385,8 @@ def delete_logs(ids: list[int]) -> None:
             conn.execute(text(f"DELETE FROM model_versions WHERE id IN ({mv_placeholders})"))
 
 
-# ------------------------------------------------------------------ #
-# 스냅샷 → 클립 교체 (탐지 전후 영상 저장 기능용)
-# ------------------------------------------------------------------ #
 def update_snapshot_uri(aid: int, uri: str, content_type: str) -> None:
-    """탐지 ID(aid)에 연결된 job의 storage_objects(object_type='thumbnail') 레코드를
-    새 uri/content_type으로 교체합니다. 탐지 시점 스냅샷 이미지를 짧은 클립
-    영상으로 바꿔치기할 때 사용합니다. 해당 job에 아직 storage_objects 행이
-    없으면(스냅샷 업로드 자체가 실패했던 경우 등) 새로 생성합니다."""
+    """탐지 ID(aid)에 연결된 job의 썸네일 storage_objects를 새 uri로 교체합니다(없으면 생성)."""
     engine = get_engine()
     with engine.begin() as conn:
         job_id = conn.execute(
