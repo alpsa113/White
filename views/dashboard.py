@@ -60,9 +60,8 @@ def render(cameras: list[dict]) -> dict:
 
     video_slots = {}
 
-    # 헤더 행 — 좌측 제목, 우측 날짜+시각 (예전에 사이드바에 있던 시계가 이 자리로 옮겨옴)
-    with st.container(horizontal=True, horizontal_alignment="distribute"):
-        render_header_clock()
+    # 헤더 — 날짜+시각만 우측 상단에 표시 (예전에 있던 "카메라 화면" 제목은 제거)
+    render_header_clock()
 
     map_selected = selected_ids()
     if map_selected:

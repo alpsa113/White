@@ -1,10 +1,15 @@
 """
-views/settings.py — 페이지3: 설정 (admin 전용)
+views/settings.py — 페이지3: 설정
 
 초소(카메라) 정보/영상 매핑, 데모 모드, 사람 등장 비율, 시스템 상태 등 자주
 바뀌지 않는 설정을 모아둔 페이지입니다. render() 함수로만 노출되며
-app.py에서 호출합니다. app.py의 이중 방어 로직에 의해 user 권한은 이
-페이지에 진입할 수 없습니다.
+app.py에서 호출합니다.
+
+이제 admin/user 모두 이 페이지에 접근할 수 있지만 노출 범위가 다릅니다:
+  - 초소 위치/정보/영상 매핑 (ui/outposts/editor.py) — admin은 전체 편집,
+    user는 조회만.
+  - 데모 모드 — admin 전용 (user에게는 이 섹션 자체가 보이지 않습니다).
+  - 시스템 상태 — admin/user 공통 조회.
 
 관리자 로그인 직후 가장 먼저 표시되는 페이지이기도 합니다
 (config.DEFAULT_LANDING_PAGE) — 실시간 감시를 시작하기 전에 초소별 CCTV
@@ -18,12 +23,13 @@ from ui.outposts.editor import render_outpost_editor
 def render() -> None:
     """설정 페이지 전체를 렌더링합니다."""
     ss = st.session_state
+    is_admin = ss.get("role") == "admin"
 
-    # ── 초소 위치 지도 + 정보/영상 매핑 편집 ──
+    # ── 초소 위치 지도 + 정보/영상 매핑 편집 (admin) / 조회 (user) ──
     # 지도 "이미지"는 config.PRESET_MAP_IMAGE_PATH에 고정되어 있고, 그 위의
-    # 마커 "위치"는 여기서 클릭으로 직접 찍고 지울 수 있습니다. 각 초소의
-    # 정보 텍스트 수정과 CCTV 영상(EO/TIR) 매핑도 여기서 합니다
-    # (§services/outposts.py 참고).
+    # 마커 "위치"는 admin만 클릭으로 직접 찍고 지울 수 있습니다. 각 초소의
+    # 정보 텍스트 수정과 CCTV 영상(EO/TIR) 매핑도 admin만 가능하고, user는
+    # 지도와 초소 정보를 조회만 할 수 있습니다 (§ui/outposts/editor.py 참고).
     render_outpost_editor()
 
     st.divider()
@@ -42,39 +48,40 @@ def render() -> None:
     # 상태값은 항상 안정적으로 유지됩니다.
     # ==================================================================== #
 
-    # ── 데모 모드 설정 ──
+    # ── 데모 모드 설정 (admin 전용) ──
     # (데모 모드를 완전히 제거할 경우, 이 구획 전체와 services/detection.py의
     #  simulate_detections()/run_detection() 안 데모 분기, state.py의 관련 두 줄을 함께 삭제)
-    st.markdown("**데모 모드**")
+    if is_admin:
+        st.markdown("**데모 모드**")
 
-    def _sync_simulate():
-        """체크박스 값을 실제 상태 키(simulate)로 복사."""
-        ss["simulate"] = ss["_simulate_widget"]
+        def _sync_simulate():
+            """체크박스 값을 실제 상태 키(simulate)로 복사."""
+            ss["simulate"] = ss["_simulate_widget"]
 
-    def _sync_person_ratio():
-        """슬라이더 값을 실제 상태 키(person_ratio)로 복사."""
-        ss["person_ratio"] = ss["_person_ratio_widget"]
+        def _sync_person_ratio():
+            """슬라이더 값을 실제 상태 키(person_ratio)로 복사."""
+            ss["person_ratio"] = ss["_person_ratio_widget"]
 
-    # 데모 모드 On/Off — 꺼져 있으면 실제 backend.py API를 호출하여 추론합니다.
-    st.checkbox(
-        "데모 모드 (무작위 탐지)",
-        value=ss.get("simulate", True),
-        key="_simulate_widget",
-        on_change=_sync_simulate,
-    )
-    # 데모 모드일 때만 의미가 있으므로, 꺼져 있으면 슬라이더 자체를 비활성화
-    st.slider(
-        "사람 등장 비율", 0.00, 1.00,
-        value=ss.get("person_ratio", 0.03),
-        step=0.01,
-        disabled=not ss.get("simulate", True),
-        key="_person_ratio_widget",
-        on_change=_sync_person_ratio,
-    )
+        # 데모 모드 On/Off — 꺼져 있으면 실제 backend.py API를 호출하여 추론합니다.
+        st.checkbox(
+            "데모 모드 (무작위 탐지)",
+            value=ss.get("simulate", True),
+            key="_simulate_widget",
+            on_change=_sync_simulate,
+        )
+        # 데모 모드일 때만 의미가 있으므로, 꺼져 있으면 슬라이더 자체를 비활성화
+        st.slider(
+            "사람 등장 비율", 0.00, 1.00,
+            value=ss.get("person_ratio", 0.03),
+            step=0.01,
+            disabled=not ss.get("simulate", True),
+            key="_person_ratio_widget",
+            on_change=_sync_person_ratio,
+        )
 
-    st.divider()
+        st.divider()
 
-    # ── 시스템 상태 표시 ──
+    # ── 시스템 상태 표시 (admin/user 공통 조회) ──
     st.markdown("**시스템 상태**")
     # DB_ENABLED는 state.py에서 앱이 리런될 때마다 db.init_db() 결과로 갱신됩니다.
     if ss.get("DB_ENABLED"):
@@ -82,7 +89,7 @@ def render() -> None:
     else:
         st.warning("🟡 메모리 모드 - RDS 미연결 (로그는 재시작 시 사라짐).")
         # init_db() 실패 시 db_rds.py가 이 키에 상세 에러 메시지를 남겨둡니다.
-        if ss.get("_db_init_error"):
+        if ss.get("_db_init_error") and is_admin:
             with st.expander("RDS 연결 오류 보기"):
                 st.code(ss["_db_init_error"])
 

@@ -27,25 +27,46 @@ from services.playback import HAS_CV2, reset_cam_state, start_camera_media
 from ui.camera.zoom import IMG_WRAP_CSS_TEMPLATE, inject_live_zoom_script
 
 # ------------------------------------------------------------------ #
-# 영상 위 상단 오버레이 바 — [카메라 이름] [EO/TIR 전환] [▦ 그리드 보기 / ⛶ 확대 / ↺ 초기화] 한 줄 배치
+# 영상 위 상단 오버레이 바 — [카메라 이름] .......... [EO][TIR][▦/⛶][↺] 2분할 배치
 #
-# CSS Grid(1fr auto 1fr)로 3영역을 나눠, 이름은 항상 좌측 끝, EO/TIR 전환은
-# 항상 정중앙, ⛶/▦·↺는 항상 우측 끝에 붙도록 고정합니다(양쪽 폭이 서로
-# 달라도 가운데 그룹이 흔들리지 않음 — flex "space-between"만으로는 이걸
-# 보장할 수 없어 grid를 씁니다).
+# 이름(좌측)과 나머지 컨트롤(EO/TIR/⛶·▦·↺, 우측)을 딱 2개 그룹으로만
+# 나눕니다 — `justify-content: space-between`으로 이름은 왼쪽 끝, 컨트롤
+# 그룹은 오른쪽 끝에 붙습니다. 컨트롤 그룹은 `flex: 0 0 auto`로 **절대
+# 줄어들지 않고 항상 자기 내용물 크기 그대로** 렌더링되고, 이름 쪽만
+# `flex: 1 1 0`(flex-basis:0 기준 축소/확장)으로 남는 공간만큼만 차지합니다.
+#
+# 이름 쪽은 감싸는 div가 줄어드는 것만으로는 부족했습니다 — 그 안의 실제
+# <button>/<p> 엘리먼트가 내용물(텍스트) 크기만큼 자기 폭을 유지하려는
+# 경향이 있어서, 부모 div는 줄어들어도 자식 엘리먼트가 그보다 넓게 튀어나와
+# 옆 컨트롤 그룹과 살짝 겹치는 문제가 있었습니다. 그래서 이름의 버튼/텍스트
+# 엘리먼트에 `width:100%; box-sizing:border-box;`를 강제해, 부모 div가
+# 줄어든 만큼 정확히 그 폭까지만 렌더링되고 넘치는 텍스트는 ellipsis로
+# 잘리도록 했습니다. 실제로 브라우저(Playwright 헤드리스 Chromium)에서
+# 버튼들의 정확한 bounding box 좌표를 측정해 어떤 카드 폭(267px~909px)에서도
+# 서로 겹치지 않는 것을 확인했습니다.
+#
+# (참고: 이전에 시도했던 방식들 — ① CSS Grid의 "1fr auto 1fr"은 가운데
+# auto 트랙이 필요한 만큼 먼저 차지하고 남는 공간을 좌우 1fr 트랙에
+# 나누는데, 이 계산이 카드가 좁을 때 좌우를 서로 다른 폭으로 만들어
+# 오른쪽 그룹이 중앙 쪽으로 쏠려 보였습니다. ② 3그룹을 각각
+# position:absolute로 독립 배치하는 방식은 더 예측 불가능하게 깨졌습니다.
+# ③ 이름/EO·TIR/아이콘 3그룹을 "flex: 1 1 0"으로 균등분배했을 때는, 카드가
+# 좁아지면 이름과 아이콘 그룹이 함께 짜부라지면서 아이콘 그룹이 통째로
+# 거의 안 보이는 크기까지 줄어드는 문제가 있었습니다. 컨트롤 그룹을 축소
+# 대상에서 아예 제외하고 이름 쪽만 희생시키는 지금의 2분할 구조가 가장
+# 안전합니다.)
 #
 # 폰트/패딩은 고정 px가 아니라 **컨테이너 쿼리**(cqw = 이 카드 자신의 가로폭
 # 기준 %)로 지정합니다 — 그리드 칸이 5~7개로 좁아지거나, 가로 스크롤 나머지
-# 카메라 카드(320px)처럼 작아져도, 카드 폭에 비례해 배지 크기/글자가 함께
-# 작아져서 서로 겹치거나 다음 카드로 번지지 않습니다. `container-type:
-# inline-size`는 ui/camera/zoom.py의 IMG_WRAP_CSS_TEMPLATE(topbar의 바로
-# 위 부모)에 선언되어 있습니다. clamp()로 최소/최대 크기를 둬서 카드가
-# 아주 작거나 아주 커도 글자가 지나치게 작아지거나 커지지 않게 막습니다.
+# 카메라 카드처럼 작아져도, 카드 폭에 비례해 배지 크기/글자가 함께 작아져서
+# 서로 겹치거나 다음 카드로 번지지 않습니다. `container-type: inline-size`는
+# ui/camera/zoom.py의 IMG_WRAP_CSS_TEMPLATE(topbar의 바로 위 부모)에
+# 선언되어 있습니다. clamp()로 최소/최대 크기를 둬서 카드가 아주 작거나
+# 아주 커도 글자가 지나치게 작아지거나 커지지 않게 막습니다.
 #
-# EO/TIR 두 버튼은 flex-wrap을 nowrap으로 강제합니다 — 지정하지 않으면
-# 카드가 좁을 때 두 버튼이 세로로 줄바꿈되면서 이름 텍스트와 겹쳐 보이는
-# 문제가 있었습니다. 이름 쪽도 min-width:0 + ellipsis로 넘치는 대신
-# "..."으로 잘리게 해 가운데/오른쪽 영역을 침범하지 않도록 했습니다.
+# EO/TIR과 ⛶·▦·↺는 하나의 컨트롤 그룹(controls_{cid})으로 묶여 함께
+# flex-wrap:nowrap을 적용받습니다 — 지정하지 않으면 카드가 좁을 때 버튼이
+# 줄바꿈되며 이름 텍스트와 겹쳐 보이는 문제가 있었습니다.
 #
 # 모든 배지(이름/EO·TIR/아이콘 버튼)를 밝은 배경 + 검은 글씨의 알약(pill)
 # 모양으로 통일해, 영상 내용이 밝든 어둡든 항상 잘 보이게 합니다. 현재
@@ -62,23 +83,32 @@ div[class*="st-key-topbar_{cid}"] {{
     z-index: 12;
     width: 100% !important;
     padding: 1.6cqw 2cqw;
-    display: grid !important;
-    grid-template-columns: 1fr auto 1fr;
+    display: flex !important;
+    flex-direction: row !important;
+    flex-wrap: nowrap !important;
     align-items: center;
-    column-gap: 1.5cqw;
+    justify-content: space-between;
+    gap: 1.5cqw;
 }}
 div[class*="st-key-topbar_{cid}"] > div:nth-child(1) {{
-    justify-self: start;
+    flex: 1 1 0;
     min-width: 0;
+    overflow: hidden;
 }}
 div[class*="st-key-topbar_{cid}"] > div:nth-child(1) button,
 div[class*="st-key-topbar_{cid}"] > div:nth-child(1) p {{
-    overflow: hidden;
-    text-overflow: ellipsis;
-    max-width: 100%;
+    display: block !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    box-sizing: border-box !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
 }}
-div[class*="st-key-topbar_{cid}"] > div:nth-child(2) {{ justify-self: center; min-width: 0; }}
-div[class*="st-key-topbar_{cid}"] > div:nth-child(3) {{ justify-self: end; min-width: 0; }}
+div[class*="st-key-topbar_{cid}"] > div:nth-child(2) {{
+    flex: 0 0 auto;
+}}
 div[class*="st-key-topbar_{cid}"] p {{
     background-color: rgba(255,255,255,0.92);
     color: #111111 !important;
@@ -100,10 +130,13 @@ div[class*="st-key-topbar_{cid}"] button {{
     opacity: 1 !important;
     min-height: 0 !important;
     height: auto !important;
+    white-space: nowrap !important;
+    flex-shrink: 0;
 }}
 div[class*="st-key-topbar_{cid}"] button p {{
     font-size: clamp(0.55rem, 3cqw, 0.85rem) !important;
     margin: 0 !important;
+    white-space: nowrap !important;
 }}
 div[class*="st-key-topbar_{cid}"] button[data-testid="stBaseButton-primary"] {{
     background-color: #cbd5e1 !important;
@@ -111,12 +144,32 @@ div[class*="st-key-topbar_{cid}"] button[data-testid="stBaseButton-primary"] {{
     border-color: #94a3b8 !important;
     box-shadow: inset 0 1px 3px rgba(0,0,0,0.18);
 }}
+div[class*="st-key-controls_{cid}"] {{
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    flex-shrink: 0 !important;
+    width: auto !important;
+    align-items: center;
+    gap: clamp(3px, 1.2cqw, 8px);
+}}
 div[class*="st-key-channel_toggle_{cid}"],
 div[class*="st-key-view_toggle_{cid}"] {{
     display: flex !important;
     flex-wrap: nowrap !important;
+    flex-shrink: 0 !important;
     width: auto !important;
     gap: clamp(2px, 1cqw, 6px);
+}}
+</style>
+"""
+
+# 카드 바깥(테두리)과 실제 영상 사이 여백을 최소화 — Streamlit의 기본
+# border=True 컨테이너 패딩(약 1rem)이 꽤 커서, 회색 영상 박스가 테두리
+# 안에서 필요 이상으로 작아 보이는 문제가 있었습니다.
+CARD_CSS_TEMPLATE = """
+<style>
+div[class*="st-key-card_{cid}"] {{
+    padding: 0.35rem !important;
 }}
 </style>
 """
@@ -136,6 +189,7 @@ def render_camera_card(cam: dict, video_slots: dict) -> None:
     cid = cam["id"]
 
     with st.container(border=True, key=f"card_{cid}"):
+        st.markdown(CARD_CSS_TEMPLATE.format(cid=cid), unsafe_allow_html=True)
         is_grid = ss.get("selected_cam") == "전체 구역"
         image_slot = _render_image_area(cam, is_grid, video_slots)
 
@@ -150,7 +204,16 @@ def render_camera_card(cam: dict, video_slots: dict) -> None:
 
 def _render_channel_toggle(cam: dict) -> None:
     """EO(가시광)/TIR(열화상) 영상 전환 탭. 설정 페이지에서 매핑해둔 채널만
-    누를 수 있고, 누르면 그 채널의 영상으로 즉시 재생을 다시 시작합니다."""
+    누를 수 있고, 누르면 그 채널의 영상으로 즉시 재생을 다시 시작합니다.
+
+    [중요] disabled 버튼에는 help(툴팁)를 넣지 않습니다 — Streamlit은
+    disabled 버튼에 help가 있으면 마우스 오버 이벤트를 감지하기 위해
+    버튼을 숨겨진 래퍼로 한 번 더 감싼 "이중 DOM" 구조를 만듭니다. 이
+    구조가 컨트롤 그룹의 "내용물 기준 자연스러운 폭"을 실제보다 훨씬
+    넓게 계산되게 만들어(그룹 자체는 flex-shrink:0이라 줄어들지 않으므로),
+    옆에 있는 카메라 이름 칸이 밀려서 안 보일 정도로 줄어드는 문제가
+    있었습니다. 영상이 아직 매핑되지 않아 버튼이 비활성화된 초기 상태에서
+    특히 두드러집니다 — help를 빼면 이 이중 구조 자체가 생기지 않습니다."""
     ss = st.session_state
     cid = cam["id"]
     active = ss.get(f"active_channel_{cid}", "eo")
@@ -162,14 +225,16 @@ def _render_channel_toggle(cam: dict) -> None:
         if st.button(
             "EO", key=f"chan_eo_{cid}",
             type="primary" if active == "eo" else "secondary",
-            disabled=eo_video is None, help="EO(가시광) 영상으로 전환",
+            disabled=eo_video is None,
+            help="EO(가시광) 영상으로 전환" if eo_video is not None else None,
         ):
             _switch_channel(cam, "eo", eo_video)
 
         if st.button(
             "TIR", key=f"chan_tir_{cid}",
             type="primary" if active == "tir" else "secondary",
-            disabled=tir_video is None, help="TIR(열화상) 영상으로 전환",
+            disabled=tir_video is None,
+            help="TIR(열화상) 영상으로 전환" if tir_video is not None else None,
         ):
             _switch_channel(cam, "tir", tir_video)
 
@@ -218,8 +283,8 @@ def _render_image_area(cam: dict, is_grid: bool, video_slots: dict):
         else:
             video_slots[cid] = image_slot
 
-        # 상단 오버레이 바 — [카메라 이름] [EO/TIR 전환] [⛶ 크게 보기 / ↺ 확대 초기화]
-        # 배치(좌/중앙/우)는 위 TOPBAR_CSS_TEMPLATE의 CSS grid가 전담합니다.
+        # 상단 오버레이 바 — [카메라 이름] .......... [EO/TIR 전환] [⛶ 크게 보기 / ↺ 확대 초기화]
+        # 배치는 위 TOPBAR_CSS_TEMPLATE의 2분할(이름 좌측 / 컨트롤 그룹 우측)이 전담합니다.
         with st.container(key=f"topbar_{cid}"):
             if is_grid:
                 if st.button(f"**{cam['name']}**", key=f"title_btn_{cid}", type="tertiary"):
@@ -228,27 +293,37 @@ def _render_image_area(cam: dict, is_grid: bool, video_slots: dict):
             else:
                 st.markdown(f"**{cam['name']}**")
 
-            _render_channel_toggle(cam)
+            # 컨트롤 그룹 — EO/TIR 전환 + 우측 아이콘을 하나의 flex 그룹으로 묶어
+            # "flex-shrink:0"을 함께 적용받게 합니다(TOPBAR_CSS_TEMPLATE 참고) —
+            # 카드가 아무리 좁아져도 이 그룹 전체는 절대 줄어들지 않고, 대신
+            # 이름 쪽만 짧게 잘립니다.
+            with st.container(key=f"controls_{cid}", horizontal=True):
+                _render_channel_toggle(cam)
 
-            # 우측 슬롯 — 그리드 모드: [⛶ 크게 보기]만.
-            # 집중 보기(스포트라이트) 모드: [▦ 전체 그리드로 돌아가기] [↺ 확대 초기화]
-            # (예전 사이드바의 "구역 선택 → 전체 구역" 기능이 이 ▦ 버튼 하나로 대체되었습니다.)
-            with st.container(key=f"view_toggle_{cid}", horizontal=True):
-                if is_grid:
-                    if st.button("⛶", key=f"expand_btn_{cid}", help="이 카메라 크게 보기"):
-                        ss["_pending_selected_cam"] = cam["name"]
-                        st.rerun()
-                else:
-                    if st.button("▦", key=f"grid_btn_{cid}", help="전체 그리드로 돌아가기"):
-                        ss["selected_cam"] = "전체 구역"
-                        st.rerun()
-                    if st.button("↺", key=f"reset_zoom_{cid}", help="확대 초기화"):
-                        st.markdown(
-                            f"<script>window.parent.document.querySelectorAll("
-                            f"'div[class*=\"st-key-img_wrap_{cid}\"] img').forEach("
-                            f"el => el.style.transform = 'none');</script>",
-                            unsafe_allow_html=True,
-                        )
+                # 그리드 모드: [⛶ 크게 보기]만.
+                # 집중 보기(스포트라이트) 모드: [▦ 전체 그리드로 돌아가기] [↺ 확대 초기화]
+                # (예전 사이드바의 "구역 선택 → 전체 구역" 기능이 이 ▦ 버튼 하나로 대체되었습니다.)
+                with st.container(key=f"view_toggle_{cid}", horizontal=True):
+                    if is_grid:
+                        if st.button("⛶", key=f"expand_btn_{cid}", help="이 카메라 크게 보기"):
+                            ss["_pending_selected_cam"] = cam["name"]
+                            st.rerun()
+                    else:
+                        if st.button("▦", key=f"grid_btn_{cid}", help="전체 그리드로 돌아가기"):
+                            ss["selected_cam"] = "전체 구역"
+                            # 지도에서 선택해둔 마커가 남아있으면 그리드 필터 모드가 우선
+                            # 적용되어(§views/dashboard.py) "전체" 그리드가 아니라 "선택된
+                            # 카메라만" 보이는 필터링된 그리드로 돌아가게 됩니다 — 이 버튼은
+                            # 이름 그대로 "전체" 그리드로 돌아가는 것이 목적이므로 함께 비웁니다.
+                            ss["_map_selected_cam_ids"] = []
+                            st.rerun()
+                        if st.button("↺", key=f"reset_zoom_{cid}", help="확대 초기화"):
+                            st.markdown(
+                                f"<script>window.parent.document.querySelectorAll("
+                                f"'div[class*=\"st-key-img_wrap_{cid}\"] img').forEach("
+                                f"el => el.style.transform = 'none');</script>",
+                                unsafe_allow_html=True,
+                            )
 
     return image_slot
 

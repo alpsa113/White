@@ -1,5 +1,5 @@
 """
-views/logs.py — 페이지2: 탐지 데이터 로그 관리
+views/logs.py — 페이지2: 감지 기록 관리
 
 dashboard.py와 마찬가지로 render() 함수로만 노출되며, app.py에서 import하여
 호출하는 방식으로만 사용합니다. (폴더명을 "views"로 지은 이유는 views/dashboard.py
@@ -15,7 +15,7 @@ from ui.log_tabs import render_view_tab, render_manage_tab
 
 
 def render() -> None:
-    """탐지 데이터 로그 페이지 전체를 렌더링합니다."""
+    """감지 기록 페이지 전체를 렌더링합니다."""
     ss = st.session_state
     st.caption("Dual-YOLO 데이터베이스 스키마(inference_jobs, detections 등)를 반영한 추론 결과입니다.")
 

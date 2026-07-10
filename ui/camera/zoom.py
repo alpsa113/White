@@ -33,6 +33,7 @@ div[class*="st-key-img_wrap_{cid}"] {{
     border-radius: 4px;
     container-type: inline-size;
 }}
+}}
 </style>
 """
 

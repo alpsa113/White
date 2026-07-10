@@ -17,7 +17,7 @@ from ui.styles import BUTTON_NOWRAP_CSS, BRAND_TITLE_STYLE
 
 # 계정 영역(하단 고정)을 사이드바 맨 아래로 밀어내는 CSS — 사이드바 콘텐츠
 # 영역을 세로 flex로 만들고, 계정 영역 컨테이너에 margin-top:auto를 줘서
-# "실시간 감시"/"관리자 로그" 버튼과는 항상 간격을 두고 하단에 붙게 합니다.
+# "실시간 감시"/"감지 기록" 버튼과는 항상 간격을 두고 하단에 붙게 합니다.
 # stSidebarContent(바깥)와 stSidebarUserContent(안쪽, 우리 위젯이 실제로
 # 그려지는 곳) 양쪽 모두에 flex+최소높이를 줘야 어느 쪽이 실제 스크롤
 # 컨테이너 역할을 하든 안정적으로 맨 아래까지 밀립니다.
@@ -84,7 +84,7 @@ def _render_account_section() -> None:
     으로 제한되는 항목은 views/settings.py·ui/outposts/editor.py가 처리),
     로그아웃/설정 버튼은 두 role 모두 한 행에 반반씩 보여줍니다."""
     ss = st.session_state
-    role_label = "관리자" if ss.role == "admin" else "사용자"
+    role_label = "관리자" if ss.role == "admin" else "병사"
     st.caption(f"👤 {ss.get('username', '')} · {role_label}")
 
     col_logout, col_settings = st.columns(2)
@@ -124,17 +124,17 @@ def render_sidebar() -> None:
         # 옮겨졌습니다 (로그아웃과 한 행에 반반씩 배치, admin/user 공통).
         #
         # 권한별 노출 범위:
-        #   "실시간 감시" / "관리자 로그" / "설정" 모두 admin·user 공통으로 접근
-        #   가능합니다. 다만 "관리자 로그" 안의 편집 탭(views/logs.py)과 "설정"
+        #   "실시간 감시" / "감지 기록" / "설정" 모두 admin·user 공통으로 접근
+        #   가능합니다. 다만 "감지 기록" 안의 편집 탭(views/logs.py)과 "설정"
         #   안의 초소 마커 추가/영상 매핑/선택/삭제·데모 모드(ui/outposts/editor.py,
         #   views/settings.py)는 admin에게만 보이고, user는 조회만 할 수 있습니다.
         if st.button("실시간 감시", use_container_width=True,
                      type="primary" if ss.current_page == "관제 대시보드" else "secondary"):
             ss.current_page = "관제 대시보드"
             st.rerun()  # 클릭 즉시 페이지 전환이 반영되도록 강제 재실행
-        if st.button("관리자 로그", use_container_width=True,
-                     type="primary" if ss.current_page == "탐지 데이터 로그" else "secondary"):
-            ss.current_page = "탐지 데이터 로그"
+        if st.button("감지 기록", use_container_width=True,
+                     type="primary" if ss.current_page == "감지 기록" else "secondary"):
+            ss.current_page = "감지 기록"
             st.rerun()
 
         _render_recent_alerts()

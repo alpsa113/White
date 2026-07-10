@@ -104,7 +104,7 @@ def render_outpost_editor() -> None:
     ss = st.session_state
     is_admin = ss.get("role") == "admin"
 
-    st.markdown("### 초소 위치")
+    st.markdown("### 초소 위치 상황판")
     if is_admin:
         st.caption(
             "지도를 클릭해 초소 마커를 추가하세요 — 찍은 마커 개수만큼 '실시간 감시'의 "

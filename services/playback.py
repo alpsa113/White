@@ -22,7 +22,7 @@ try:
 except ImportError:
     HAS_CV2 = False
 
-from config import DETECT_EVERY_SECONDS, IMAGE_EXTS, VIDEO_EXTS
+from config import DETECT_EVERY_SECONDS, IMAGE_EXTS, VIDEO_EXTS, CLIP_STORAGE_MAX_WIDTH
 from services.detection import draw_boxes
 from services.tracking import process_frame
 from services.clip_recorder import push_frame_buffer, start_pending_clips, append_pending_clips
@@ -111,6 +111,21 @@ def start_camera_media(cam: dict, data: bytes, filename: str) -> str:
 
     else:
         return "unsupported"
+
+
+# ------------------------------------------------------------------ #
+# 클립/버퍼 저장용 프레임 축소
+# ------------------------------------------------------------------ #
+def _downscale_for_clip(frame_rgb: np.ndarray) -> np.ndarray:
+    """클립/순환 버퍼에 저장할 프레임을 CLIP_STORAGE_MAX_WIDTH 이하로 축소합니다.
+    화면 표시용 프레임(annotated)은 그대로 두고, 저장용으로만 별도 축소본을
+    만듭니다 — 카메라가 여러 대일 때 이 저장용 프레임의 메모리 사용량이
+    지배적이므로, 화면 해상도와 분리해서 관리합니다."""
+    height, width = frame_rgb.shape[:2]
+    if width <= CLIP_STORAGE_MAX_WIDTH:
+        return frame_rgb
+    new_height = int(height * CLIP_STORAGE_MAX_WIDTH / width)
+    return cv2.resize(frame_rgb, (CLIP_STORAGE_MAX_WIDTH, new_height))
 
 
 # ------------------------------------------------------------------ #
@@ -227,10 +242,15 @@ def run_playback_loop(active_cams: list[dict], video_slots: dict) -> None:
 
             # 클립/버퍼에는 바운딩 박스가 그려진 화면(annotated)을 저장해야 합니다 —
             # 박스를 그리기 전의 원본 프레임을 저장하면 클립 재생 시 박스가 보이지 않습니다.
-            annotated_np = np.array(annotated)  # PIL(RGB) → numpy 배열 (imageio도 RGB를 기대함)
-            push_frame_buffer(cid, annotated_np, now)             # 최근 N초 순환 버퍼에 추가
-            start_pending_clips(cam, new_alert_ids, fps, now)     # 새 탐지가 있으면 클립 녹화 시작
-            append_pending_clips(cid, annotated_np, now)          # 대기 중인 클립에 이번 프레임 추가
+            # 다만 클립은 화면 표시(최대 1080px)만큼 고해상도일 필요가 없으므로,
+            # CLIP_STORAGE_MAX_WIDTH로 한 번 더 축소한 별도 사본을 만들어 넘깁니다 —
+            # 카메라 여러 대가 동시에 버퍼/대기 클립을 들고 있는 상황에서 메모리
+            # 사용량을 몇 배 줄여주는 핵심 조치입니다(§services/clip_recorder.py
+            # 모듈 docstring의 "메모리 관리 원칙" 참고).
+            clip_frame = _downscale_for_clip(np.array(annotated))  # PIL(RGB) → numpy 배열 (imageio도 RGB를 기대함)
+            push_frame_buffer(cid, clip_frame, now)                # 최근 N초 순환 버퍼에 추가
+            start_pending_clips(cam, new_alert_ids, fps, now)      # 새 탐지가 있으면 클립 녹화 시작
+            append_pending_clips(cid, clip_frame, now)             # 대기 중인 클립에 이번 프레임 추가
 
             ss[f"result_{cid}"] = annotated
             if cid in video_slots:

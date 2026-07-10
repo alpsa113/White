@@ -9,10 +9,10 @@ app.py — GOP 통합 감시 시스템 메인 엔트리포인트
 session_state.authenticated가 False인 동안은 views/login.py만 렌더링되고
 그 외 모든 로직(사이드바, 카메라, 재생 루프)은 실행되지 않습니다. 로그인
 성공 후에는 role("admin"|"user")에 따라 일부 화면의 노출 범위가 달라집니다.
-"관제 대시보드"·"탐지 데이터 로그"·"설정" 세 페이지 모두 두 role이 접근할 수
+"관제 대시보드"·"감지 기록"·"설정" 세 페이지 모두 두 role이 접근할 수
 있지만, "설정" 페이지 안의 초소 마커 추가/영상 매핑/선택/삭제와 데모 모드는
 admin만 가능하고 user는 조회만 할 수 있습니다(views/settings.py, ui/outposts/
-editor.py가 role을 보고 위젯을 읽기 전용으로 바꿉니다). "탐지 데이터 로그"
+editor.py가 role을 보고 위젯을 읽기 전용으로 바꿉니다). "감지 기록"
 안의 편집 탭도 마찬가지로 admin에게만 보입니다(views/logs.py 참고).
 
 실행 방법:
@@ -61,7 +61,7 @@ video_slots = {}
 # 현재 선택된 페이지의 render()만 호출 — 나머지 페이지 코드는 실행되지 않음
 if page_selection == "관제 대시보드":
     video_slots = dashboard.render(cameras)
-elif page_selection == "탐지 데이터 로그":
+elif page_selection == "감지 기록":
     logs.render()
 elif page_selection == "설정":
     settings.render()

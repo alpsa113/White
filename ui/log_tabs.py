@@ -1,5 +1,5 @@
 """
-ui/log_tabs.py — 탐지 데이터 로그 페이지의 두 탭(조회 / 편집) 렌더링
+ui/log_tabs.py — 감지 기록 페이지의 두 탭(조회 / 편집) 렌더링
 
 탭1(render_view_tab)은 표 + 선택한 행의 탐지 이미지를 보여주는 조회 전용 화면이고,
 탭2(render_manage_tab)는 st.data_editor 기반으로 실제 수정/삭제가 가능한 편집 화면입니다.

@@ -80,7 +80,7 @@ def init_db() -> bool:
 
         # 2. inference_jobs — 탐지 작업(현재 구조에서는 탐지 1건) 단위 관리
         #    camera: 어느 CCTV 채널에서 발생한 작업인지
-        #    remarks: 관리자 로그 화면에서 입력하는 비고
+        #    remarks: 감지 기록 화면에서 입력하는 비고
         #    conf_thresh: 해당 작업에 실제 적용된 신뢰도 임계값 (backend.py 응답값을 그대로 기록)
         """
         CREATE TABLE IF NOT EXISTS inference_jobs (

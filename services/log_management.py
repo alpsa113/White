@@ -1,7 +1,7 @@
 """
 services/log_management.py — 로그 편집/삭제 저장 처리
 
-관리자 로그 화면의 data_editor에서 수정된 내용을 원본(df_edit_orig)과
+감지 기록 화면의 data_editor에서 수정된 내용을 원본(df_edit_orig)과
 비교하여 실제로 변경된 부분만 session_state·RDS·S3에 반영합니다.
 UI(ui/log_tabs.py)는 이 모듈이 반환한 결과 딕셔너리를 화면에 표시만 하고,
 DB/S3 관련 판단과 처리는 전부 이 모듈이 담당합니다.
