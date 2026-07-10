@@ -44,10 +44,14 @@ def push_frame_buffer(cid: str, frame_rgb, now: float) -> None:
         buf.popleft()
 
 
-def start_pending_clips(cam: dict, new_alert_ids: list[int], fps: float, now: float) -> None:
+def start_pending_clips(cam: dict, new_alert_ids: list[int], now: float) -> None:
     """새로 탐지된 로그마다, 지금까지 쌓인 '이전 N초' 프레임을 시작점으로 하는
     대기 클립을 등록합니다. 이후 프레임은 append_pending_clips()가 계속 채우다가,
     CLIP_POST_SECONDS가 지나면 자동으로 인코딩·업로드됩니다.
+
+    프레임을 (타임스탬프, 이미지) 쌍으로 저장해두는 이유는 _finalize_clip()이
+    "실제로 몇 초 분량을 캡처했는지"를 프레임 개수가 아니라 타임스탬프
+    간격으로 정확히 계산하기 위해서입니다 — §_finalize_clip 참고.
 
     [메모리 관리] 대기 클립 1개는 CLIP_PRE+POST_SECONDS(기본 6초) 분량의
     프레임을 통째로 들고 있습니다 — 짧은 시간에 새 탐지가 여러 건 연달아
@@ -67,15 +71,14 @@ def start_pending_clips(cam: dict, new_alert_ids: list[int], fps: float, now: fl
     ids_to_start = new_alert_ids[:room]
 
     buf = ss.get(f"frame_buffer_{cid}", deque())
-    pre_frames = [f for _, f in buf]  # 지금까지의 '이전 N초' 프레임 복사
+    pre_entries = list(buf)  # 지금까지의 '이전 N초' (타임스탬프, 프레임) 쌍 복사
 
     for aid in ids_to_start:
         pending.append({
             "aid": aid,
             "camera_name": cam["name"],
-            "frames": list(pre_frames),
+            "entries": list(pre_entries),
             "capture_until": now + CLIP_POST_SECONDS,
-            "fps": fps,
         })
 
 
@@ -95,7 +98,7 @@ def append_pending_clips(cid: str, frame_rgb, now: float) -> None:
 
     still_pending = []
     for pc in pending:
-        pc["frames"].append(frame_rgb.copy())
+        pc["entries"].append((now, frame_rgb.copy()))
         if now >= pc["capture_until"]:
             _finalize_clip_async(pc)
         else:
@@ -129,12 +132,28 @@ def _finalize_clip(pc: dict) -> None:
     cv2.VideoWriter(fourcc='mp4v')는 이름과 달리 MPEG-4 Part 2라는 구형
     코덱으로 인코딩하는데, 이건 대부분의 브라우저 <video> 태그가 지원하지
     않아 "재생 시도하다가 조용히 멈추는" 증상이 납니다. imageio-ffmpeg는
-    pip 설치만으로 실제 H.264(avc1) 인코딩이 가능해 웹에서 확실히 재생됩니다."""
-    frames = pc["frames"]
-    if not frames:
-        return
+    pip 설치만으로 실제 H.264(avc1) 인코딩이 가능해 웹에서 확실히 재생됩니다.
 
-    fps = pc.get("fps") or 10.0
+    [인코딩 fps 계산 — "0~1초짜리 클립" 버그 수정] 예전에는 원본 영상의
+    fps(예: 30)를 그대로 인코딩에 썼습니다. 그런데 이 클립에 실제로 담기는
+    프레임 개수는 원본 fps가 아니라 "Streamlit 재실행 주기 동안 append_
+    pending_clips가 몇 번 호출됐는지"에 따라 결정됩니다 — 카메라가 여러 대이거나
+    (특히 EO/TIR을 둘 다 항상 재생하는 지금 구조에서) 시스템이 바빠서 재실행이
+    밀리면, 프레임이 밀린 만큼 큰 구간을 건너뛰는 seek(§services/playback.py의
+    LARGE_GAP_THRESHOLD)이 자주 발생해 실제로 캡처되는 프레임 수가 원본 fps보다
+    훨씬 적어질 수 있습니다. 이 상태에서 원본 fps로 인코딩하면 "6초 분량을
+    캡처했는데 프레임은 15장뿐이라 재생 시간이 0.5초"가 되는 것이 버그의
+    정체였습니다. 그래서 프레임에 함께 저장해둔 타임스탬프로 "실제로 걸린
+    시간"을 직접 계산해 인코딩 fps를 역산합니다 — 프레임이 드문드문 찍혔어도
+    클립의 재생 시간만큼은 항상 실제 경과 시간과 일치합니다."""
+    entries = pc["entries"]
+    if not entries:
+        return
+    frames = [f for _, f in entries]
+
+    elapsed = entries[-1][0] - entries[0][0]
+    fps = (len(frames) - 1) / elapsed if len(frames) > 1 and elapsed > 0 else 10.0
+    fps = max(1.0, min(fps, 60.0))  # 비정상적으로 크거나 작은 값 방지
 
     with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as tmp:
         clip_path = tmp.name

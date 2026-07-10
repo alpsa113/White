@@ -17,8 +17,9 @@ def init_session_state() -> None:
     ss = st.session_state
 
     # ── 주요 데이터 컨테이너 ──
-    ss.setdefault("detection_logs", [])   # 전체 탐지 이력 (로그 페이지에서 사용 · RDS 연결 시 과거 이력까지 포함)
+    ss.setdefault("detection_logs", [])   # 전체 탐지 이력 ('감지 기록' 페이지가 그대로 사용 · RDS 연결 시 과거 이력까지 포함)
     ss.setdefault("next_alert_id", 1)     # 메모리 모드(DB 미연결)일 때 새 로그에 부여할 로컬 ID 카운터
+    ss.setdefault("_session_start_max_id", 0)  # 이 값보다 큰 id만 "이번 실행 중 새 탐지"로 간주 (ui/camera/detection_panel.py가 '탐지 이력' 패널 필터링에 사용 — _sync_db_and_s3 참고)
 
     # ── 데모 및 시뮬레이션 설정 ──
     ss.setdefault("simulate", True)       # True면 backend.py 호출 없이 무작위 탐지 데이터를 생성
@@ -48,7 +49,15 @@ def init_session_state() -> None:
 
 
 def _sync_db_and_s3() -> None:
-    """DB/S3 연결 가능 여부를 확인하고, 최초 1회만 과거 로그를 메모리로 적재합니다."""
+    """DB/S3 연결 가능 여부를 확인하고, 최초 1회만 과거 로그를 메모리로 적재합니다.
+
+    '감지 기록' 페이지(views/logs.py)는 detection_logs를 그대로 보여주므로
+    RDS에 쌓인 과거 이력이 계속 조회/편집 가능해야 합니다 — 그래서 과거 이력
+    적재 자체는 유지합니다. 다만 '실시간 감시' 페이지의 '탐지 이력' 패널
+    (ui/camera/detection_panel.py)은 매 실행마다 오래된 이력까지 다시
+    보여주면 "방금 무슨 일이 있었는지"를 파악하기 어려우므로, 적재 시점의
+    최대 id를 _session_start_max_id에 기록해두고 그 값을 워터마크 삼아
+    "이번 실행 중 새로 생긴 탐지"만 그 패널에 걸러 보여줍니다."""
     ss = st.session_state
 
     # 앱이 리런될 때마다 연결 가능 여부를 다시 확인 — DB_ENABLED/S3_ENABLED는
@@ -63,7 +72,9 @@ def _sync_db_and_s3() -> None:
             ss.detection_logs = db.fetch_all_logs()
             # 기존 DB에 저장된 가장 큰 ID를 기준으로 로컬 카운터를 동기화 (메모리 모드로 전환되어도 ID가 겹치지 않도록)
             if ss.detection_logs:
-                ss.next_alert_id = max(a["id"] for a in ss.detection_logs) + 1
+                max_id = max(a["id"] for a in ss.detection_logs)
+                ss.next_alert_id = max_id + 1
+                ss._session_start_max_id = max_id  # 이 워터마크보다 큰 id만 '탐지 이력' 패널에 새로 나타남
             ss.db_loaded = True
         except Exception as e:
             ss["db_write_warning"] = f"RDS 로그 불러오기 실패: {e}"

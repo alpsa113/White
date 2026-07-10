@@ -10,8 +10,20 @@ import pandas as pd
 import streamlit as st
 
 import s3_storage as s3
+from config import PERSON_CLASSES
 from services.log_management import save_log_edits
 from utils.formatters import fmt_dt
+
+# 클래스명이 사람인 행을 표에서 눈에 띄게 구분하기 위한 배경색/글자색
+# (ui/camera/detection_panel.py의 사람 강조 색상과 통일)
+_PERSON_CLASS_BG = "background-color: rgba(248,81,73,0.18);"
+_PERSON_CLASS_STYLE = _PERSON_CLASS_BG + "color: #f85149; font-weight: 700;"
+
+
+def _highlight_person_class(val: str) -> str:
+    """DataFrame.style.map에 넘길 셀 스타일 함수 — '클래스명' 컬럼에서
+    사람 클래스일 때만 배경색/글자색을 강조합니다."""
+    return _PERSON_CLASS_STYLE if val in PERSON_CLASSES else ""
 
 
 def _build_view_df(sorted_logs: list[dict]) -> pd.DataFrame:
@@ -39,8 +51,13 @@ def render_view_tab(sorted_logs: list[dict]) -> None:
 
     with view_col:
         # 경로가 긴 이미지 URI는 표에서 숨겨 가독성을 확보 (이미지 열람 자체는 img_col에서 처리)
+        # '클래스명'이 사람인 행은 배경색으로 강조 (Styler는 st.dataframe에서만
+        # 지원되고, 아래 편집 탭의 st.data_editor에서는 지원되지 않음)
+        styled_df = df.drop(columns=["이미지 URI"]).style.map(
+            _highlight_person_class, subset=["클래스명"]
+        )
         selection = st.dataframe(
-            df.drop(columns=["이미지 URI"]),
+            styled_df,
             use_container_width=True,
             hide_index=True,
             on_select="rerun",
@@ -120,6 +137,9 @@ def render_manage_tab(sorted_logs: list[dict]) -> None:
     )
 
     # ── 편집용 DataFrame 빌드 ──
+    # st.data_editor는 st.dataframe과 달리 pandas Styler(셀 배경색)를 지원하지
+    # 않아 이 탭에서는 사람 탐지 행을 색으로 구분하지 않습니다 — 조회 탭
+    # (_build_view_df)의 실제 셀 배경색 강조만으로 충분하다는 판단입니다.
     df_edit_data = []
     for a in sorted_logs:
         df_edit_data.append({

@@ -72,7 +72,15 @@ def marker_css(cid: str, x_ratio: float, y_ratio: float, *, selected: bool, blin
     ui/camera/zoom.py의 오버레이 위치 지정 패턴(div[class*="st-key-..."])을 그대로 따릅니다.
     설정 페이지 지도 미리보기(ui/outposts/editor._draw_markers)가 PIL로 그리는
     "번호 매긴 원" 모양과 맞추기 위해, 버튼 안에 번호가 들어갈 수 있도록
-    크기/폰트를 키웠습니다(§3.2 두 화면 모두 같은 마커 모양)."""
+    크기/폰트를 키웠습니다(§3.2 두 화면 모두 같은 마커 모양).
+
+    마커 크기는 고정 px가 아니라 지도 래퍼 자신의 폭 기준 컨테이너 쿼리
+    단위(cqw, ui/outposts/viewer.py가 MAP_WRAP_KEY 컨테이너에 container-type:
+    inline-size를 선언)로 지정합니다 — 지도가 '실시간 감시' 헤더의 좁은
+    미니맵처럼 작게 표시되면 마커도 함께 비례해서 작아지고, 설정 페이지처럼
+    넓게 표시되면 (clamp 상한까지) 커집니다. 지도 이미지 자체도 래퍼 폭의
+    100%로 그려지므로, 이렇게 하면 마커와 지도가 항상 같은 비율로 함께
+    커지고 작아집니다."""
     color = SELECTED_COLOR if selected else DEFAULT_COLOR
     blink_rule = "animation: outpost-marker-blink 1s infinite;" if blinking else ""
     return f"""
@@ -86,24 +94,33 @@ def marker_css(cid: str, x_ratio: float, y_ratio: float, *, selected: bool, blin
         width: auto !important;
     }}
     div[class*="st-key-outpost_marker_{cid}"] button {{
-        width: 26px; height: 26px; padding: 0; border-radius: 50%;
+        width: clamp(12px, 6.5cqw, 22px); height: clamp(12px, 6.5cqw, 22px);
+        min-height: 0 !important;
+        box-sizing: border-box !important;
+        padding: 0 !important; border-radius: 50% !important;
+        display: flex !important; align-items: center; justify-content: center;
         background-color: {color} !important; color: white !important;
-        border: 2px solid white !important;
-        font-size: 13px; font-weight: 700; line-height: 1;
+        border: clamp(1px, 0.6cqw, 2px) solid white !important;
+        font-size: clamp(7px, 3.4cqw, 13px); font-weight: 700; line-height: 1;
         {blink_rule}
     }}
     div[class*="st-key-outpost_stop_{cid}"] {{
         position: absolute;
-        left: calc({x_ratio * 100:.3f}% + 18px);
-        top: calc({y_ratio * 100:.3f}% - 18px);
+        left: calc({x_ratio * 100:.3f}% + 4.5cqw);
+        top: calc({y_ratio * 100:.3f}% - 4.5cqw);
         transform: translate(-50%, -50%);
         z-index: 11;
         width: auto !important;
     }}
     div[class*="st-key-outpost_stop_{cid}"] button {{
-        width: 18px; height: 18px; padding: 0; border-radius: 50%;
+        width: clamp(8px, 4.2cqw, 15px); height: clamp(8px, 4.2cqw, 15px);
+        min-height: 0 !important;
+        box-sizing: border-box !important;
+        padding: 0 !important; border-radius: 50% !important;
+        display: flex !important; align-items: center; justify-content: center;
         background-color: #21262d !important; color: white !important;
-        border: 1px solid white !important; font-size: 10px; line-height: 1;
+        border: 1px solid white !important;
+        font-size: clamp(5px, 2.5cqw, 10px); line-height: 1;
     }}
     </style>
     """

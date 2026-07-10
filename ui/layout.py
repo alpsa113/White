@@ -12,7 +12,6 @@ RDS/S3 연결 상태뱃지와 실시간 시계는 더 이상 이 사이드바에
 """
 import streamlit as st
 
-from utils.formatters import fmt_dt
 from ui.styles import BUTTON_NOWRAP_CSS, BRAND_TITLE_STYLE
 
 # 계정 영역(하단 고정)을 사이드바 맨 아래로 밀어내는 CSS — 사이드바 콘텐츠
@@ -36,28 +35,6 @@ div[class*="st-key-sidebar_footer"] {
 }
 </style>
 """
-
-
-def _render_recent_alerts() -> None:
-    """최근 사람 탐지 중 가장 마지막 건을 라벨로 보여주고, 클릭해서 펼치면
-    최근 목록 전체를 보여줍니다. 탐지 일시 등은 detection_logs에서 그대로
-    가져와 표시할 뿐, 별도로 시각을 다시 계산하지 않습니다."""
-    ss = st.session_state
-    recent_ids = list(ss.get("recent_person_alert_ids", []))
-    if not recent_ids:
-        return
-
-    logs_by_id = {a["id"]: a for a in ss.detection_logs}
-    recent_logs = [logs_by_id[aid] for aid in reversed(recent_ids) if aid in logs_by_id]
-    if not recent_logs:
-        return
-
-    latest = recent_logs[0]
-    label = f"최근 탐지: {latest['camera']} · {latest['class_name']} · {fmt_dt(latest)[-8:]}"
-
-    with st.expander(label, expanded=False):
-        for a in recent_logs:
-            st.caption(f"{fmt_dt(a)} · {a['camera']} · {a['class_name']}")
 
 
 def _render_db_write_warning() -> None:
@@ -137,7 +114,6 @@ def render_sidebar() -> None:
             ss.current_page = "감지 기록"
             st.rerun()
 
-        _render_recent_alerts()
         _render_db_write_warning()
 
         # 계정 정보 + 로그아웃/설정 — SIDEBAR_FOOTER_CSS가 이 컨테이너를

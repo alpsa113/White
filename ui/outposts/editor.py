@@ -14,7 +14,7 @@ ui/outposts/editor.py — 설정 페이지: 초소 위치 지도(클릭 마킹) 
 표시하고, 실제 선택/해제·삭제·영상 매핑은 그 아래 목록의 버튼으로 합니다.
 
 각 초소 행에서 admin이 할 수 있는 일 (user는 초소 정보 조회만 가능 —
-지도 클릭/영상 업로드/선택/삭제 버튼이 아예 보이지 않습니다):
+지도 클릭/영상 업로드/삭제 버튼이 아예 보이지 않습니다):
   1) "초소 정보" 텍스트 수정 (입력 즉시 자동 저장됩니다)
   2) CCTV 영상을 EO(가시광)/TIR(열화상) 채널로 각각 매핑(업로드) — 우리
      탐지 모델이 두 영상을 함께 입력받는 RGB-IR 융합 모델이기 때문입니다.
@@ -22,11 +22,13 @@ ui/outposts/editor.py — 설정 페이지: 초소 위치 지도(클릭 마킹) 
      '실시간 감시' 페이지의 카메라 카드가 별도 업로드 없이 바로 재생합니다
      (기본은 EO 채널 — 카드 상단의 EO/TIR 탭으로 즉석 전환 가능,
      ui/camera/card.py 참고).
-  3) "CCTV 화면 보기"로 선택/해제 (🔵/🔴 버튼) — 대시보드의 '카메라 화면'
-     탭(선택된 카메라만 그리드로 필터링)과 '관제 지도' 탭(왼쪽 CCTV 요약·
-     마커 색상) 양쪽 모두와 이 선택 상태를 공유합니다
-     (ui/outposts/marker_overlay.toggle_selection).
-  4) 마커 삭제 (🗑 버튼) — 그 초소의 재생 리소스도 함께 정리됩니다.
+  3) 마커 삭제 (🗑 버튼) — 그 초소의 재생 리소스도 함께 정리됩니다.
+
+"CCTV 화면 보기" 선택/해제는 이 목록에는 더 이상 버튼이 없습니다 — 대신
+'실시간 감시' 페이지 헤더의 지도 미니맵(ui/outposts/viewer.render_map)에서
+마커를 직접 클릭해 토글합니다. 그 선택 상태(session_state.
+_map_selected_cam_ids)는 미니맵과 '실시간 감시'의 그리드 필터링이 공유합니다
+(ui/outposts/marker_overlay.toggle_selection).
 """
 import io
 
@@ -36,7 +38,7 @@ from streamlit_image_coordinates import streamlit_image_coordinates
 
 from config import VIDEO_EXTS
 from services import outposts as outposts_service
-from ui.outposts.marker_overlay import DEFAULT_COLOR, SELECTED_COLOR, selected_ids, toggle_selection
+from ui.outposts.marker_overlay import DEFAULT_COLOR, SELECTED_COLOR, selected_ids
 
 
 def _draw_markers(base_img: Image.Image, outposts: list[dict], selected: set) -> Image.Image:
@@ -47,10 +49,13 @@ def _draw_markers(base_img: Image.Image, outposts: list[dict], selected: set) ->
     img = base_img.convert("RGB").copy()
     draw = ImageDraw.Draw(img)
     w, h = img.size
-    radius = max(11, min(w, h) // 45)
+    # '실시간 감시' 미니맵의 CSS 마커(ui/outposts/marker_overlay.py)와 크기 인상이
+    # 비슷하도록 반지름/폰트를 키웠습니다 — 이전 값(반지름 min(w,h)//45, 폰트
+    # 반지름*1.1)은 원 자체는 정원이었지만 숫자에 비해 작아 보이는 문제가 있었습니다.
+    radius = max(16, min(w, h) // 32)
     try:
         font = ImageFont.truetype(
-            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", max(12, int(radius * 1.1))
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", max(18, int(radius * 1.3))
         )
     except Exception:
         font = ImageFont.load_default()
@@ -59,7 +64,7 @@ def _draw_markers(base_img: Image.Image, outposts: list[dict], selected: set) ->
         cx, cy = o["x_ratio"] * w, o["y_ratio"] * h
         color = SELECTED_COLOR if o["id"] in selected else DEFAULT_COLOR
         draw.ellipse([cx - radius, cy - radius, cx + radius, cy + radius],
-                     fill=color, outline="white", width=2)
+                     fill=color, outline="white", width=3)
         label = str(i + 1)
         bbox = draw.textbbox((0, 0), label, font=font)
         tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
@@ -105,13 +110,7 @@ def render_outpost_editor() -> None:
     is_admin = ss.get("role") == "admin"
 
     st.markdown("### 초소 위치 상황판")
-    if is_admin:
-        st.caption(
-            "지도를 클릭해 초소 마커를 추가하세요 — 찍은 마커 개수만큼 '실시간 감시'의 "
-            "카메라가 자동으로 생성됩니다. 아래 목록에서 각 초소의 정보를 수정하거나 "
-            "EO/TIR 영상을 매핑해두면, '실시간 감시' 페이지에서 별도 업로드 없이 바로 재생됩니다."
-        )
-    else:
+    if not is_admin:
         st.caption("현재 등록된 초소 위치와 정보를 조회할 수 있습니다 (조회 전용).")
 
     outposts = outposts_service.get_outposts()
@@ -137,10 +136,6 @@ def render_outpost_editor() -> None:
             st.markdown("**지도 미리보기** (조회 전용)")
             st.image(preview, use_container_width=True)
 
-        st.caption("🔵 기본 · 🔴 CCTV 화면 보기로 선택됨"
-                   + (" — 선택/해제는 아래 목록의 버튼을 사용하세요 "
-                      "('카메라 화면'·'관제 지도' 탭과 선택 상태가 함께 반영됩니다)." if is_admin else "."))
-
     with list_col:
         st.markdown("**초소 정보** · 영상 매핑" if is_admin else "**초소 정보**")
         if not outposts:
@@ -150,18 +145,19 @@ def render_outpost_editor() -> None:
         for i, m in enumerate(outposts):
             cid = m["id"]
             cam_name = cam_name_by_id.get(cid, cid)
-            is_selected = cid in selected
 
             if is_admin:
-                _render_row_admin(i, m, cid, cam_name, is_selected)
+                _render_row_admin(i, m, cid, cam_name)
             else:
                 _render_row_readonly(i, m)
 
 
-def _render_row_admin(i: int, m: dict, cid: str, cam_name: str, is_selected: bool) -> None:
-    """admin용 초소 1행 — 정보 수정 + 영상 매핑(EO/TIR) + 선택/삭제."""
-    name_col, info_col, popover_col, select_col, delete_col = st.columns(
-        [1, 2.4, 0.6, 0.6, 0.6]
+def _render_row_admin(i: int, m: dict, cid: str, cam_name: str) -> None:
+    """admin용 초소 1행 — 정보 수정 + 영상 매핑(EO/TIR) + 삭제. "CCTV 화면
+    보기" 선택/해제는 이 목록이 아니라 '실시간 감시' 헤더 미니맵의 마커
+    클릭으로 합니다(ui/outposts/viewer.render_map)."""
+    name_col, info_col, popover_col, delete_col = st.columns(
+        [1, 3, 0.6, 0.6]
     )
 
     with name_col:
@@ -201,12 +197,6 @@ def _render_row_admin(i: int, m: dict, cid: str, cam_name: str, is_selected: boo
                     outposts_service.set_marker_video(cid, "tir", tir_upload.getvalue(), tir_upload.name)
                 st.success("저장되었습니다.")
                 st.rerun()
-
-    with select_col:
-        icon = "🔴" if is_selected else "🔵"
-        help_txt = f"{cam_name} — 클릭하여 선택 해제" if is_selected else f"{cam_name} — 클릭하여 CCTV 화면 보기로 선택"
-        if st.button(icon, key=f"_op_select_{cid}", help=help_txt):
-            toggle_selection(cid)
 
     with delete_col:
         if st.button("🗑", key=f"_op_delete_{cid}", help=f"{cam_name} — 마커 삭제"):

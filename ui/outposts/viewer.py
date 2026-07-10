@@ -1,12 +1,12 @@
 """
 ui/outposts/viewer.py — 관제 지도(초소 마커 + 점멸) 렌더링
 
-과거에는 대시보드에 독립된 "관제 지도" 탭이 있었지만 제거되었습니다. 설정
-페이지에서 지정한 마커 찍힌 지도 이미지 자체는 그대로 살려서, '카메라 화면'
-탭이 집중 보기(스포트라이트) 모드일 때 우측 패널에 끼워 넣는 용도로만
-사용합니다 (ui/camera/spotlight.py 참고) — 그 화면에서 "지금 포커스 중인
-카메라가 지도 어디에 있는지", "다른 곳에서 사람이 탐지되고 있는지"를 함께
-보여주기 위함입니다.
+과거에는 대시보드에 독립된 "관제 지도" 탭이 있었고, 그 다음에는 헤더
+우측에 잠깐 있었지만, 지금은 '실시간 감시' 페이지 맨 오른쪽 컬럼(객체 탐지
+이력 패널 바로 위, "초소 위치" 문구와 함께)에 미니맵으로 항상 표시됩니다
+(views/dashboard.py 참고) — 모드와 무관하게 "지금 각 카메라가 지도 어디에
+있는지", "다른 곳에서 사람이 탐지되고 있는지"를 항상 볼 수 있도록 하기
+위함입니다.
 
 마커를 클릭하면 여전히 "CCTV 화면 보기" 선택 상태(session_state.
 _map_selected_cam_ids)를 토글합니다 — 이 상태는 설정 페이지의 초소 위치
@@ -68,6 +68,7 @@ def render_map(cameras: list[dict]) -> None:
         aspect-ratio: {img_w} / {img_h};
         overflow: hidden;
         border-radius: 4px;
+        container-type: inline-size;
     }}
     div[class*="st-key-{MAP_WRAP_KEY}"] img {{
         width: 100% !important;
@@ -84,7 +85,10 @@ def render_map(cameras: list[dict]) -> None:
         for i, o in enumerate(outposts):
             cid = o["id"]
             cam_name = cam_name_by_id.get(cid, cid)
-            tracks = ss.get(f"person_tracks_{cid}")
+            # 사람 추적 상태는 이제 EO/TIR 채널별로 분리되어 저장됩니다
+            # (services/playback.py — person_tracks_{cid}_eo / _tir). 둘 중
+            # 하나라도 사람을 추적 중이면 마커가 점멸합니다.
+            tracks = ss.get(f"person_tracks_{cid}_eo") or ss.get(f"person_tracks_{cid}_tir")
             is_blinking = bool(tracks) and not ss.get(f"blink_stopped_{cid}", False)
             # 추적이 끊기면(더 이상 사람이 없으면) 정지 상태를 해제해 다음 탐지 때 다시 점멸하도록 함
             if not tracks:

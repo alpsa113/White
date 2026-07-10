@@ -31,24 +31,32 @@ def get_active_cameras() -> list[dict]:
 
 def _sync_preset_media(outposts: list[dict], cameras: list[dict]) -> None:
     """설정 페이지에서 초소에 매핑해둔 영상을, 아직 반영되지 않은 카메라
-    채널에 자동으로 반영합니다 (ui/camera/card.py의 자체 업로드 버튼을
-    대체). 어느 채널(EO/TIR)을 반영할지는 session_state.active_channel_{cid}
-    를 따르며, 아직 카드에서 전환한 적이 없으면 기본값인 EO를 사용합니다.
-    이미 반영된 채널(fp_{cid} 존재 — 카드의 EO/TIR 수동 전환 포함)은 매
-    실행마다 재초기화되지 않도록 건너뜁니다."""
+    채널에 자동으로 반영합니다 (ui/camera/card.py의 자체 업로드 버튼을 대체).
+
+    카메라 1대당 "배경 채널"(session_state.active_channel_{cid}, 기본값
+    "eo") **하나만** 자동으로 재생을 시작합니다 — 한때는 EO/TIR을 둘 다
+    항상 동시에 재생했지만, 카메라가 몇 대만 있어도 매 프레임 디코딩
+    부담이 두 배가 되어 실제로 메모리 부족(OOM)으로 OpenCV가 프레임 버퍼를
+    할당하지 못해 크래시하는 문제가 있었습니다(§services/playback.py 모듈
+    docstring). 보조 채널(스포트라이트 2분할의 두 번째 화면)은 사용자가
+    실제로 켰을 때만 ui/camera/card.py가 그때그때 재생을 시작/중지합니다.
+    이미 반영된 채널(fp_{cid}_{channel} 존재)은 매 실행마다 재초기화되지
+    않도록 건너뜁니다."""
     ss = st.session_state
     cam_by_id = {c["id"]: c for c in cameras}
     for o in outposts:
         cid = o["id"]
-        if ss.get(f"fp_{cid}") is not None:
+        cam = cam_by_id.get(cid)
+        if not cam:
             continue
         channel = ss.get(f"active_channel_{cid}", "eo")
+        if ss.get(f"fp_{cid}_{channel}") is not None:
+            continue
         data = o.get(f"video_{channel}_bytes")
         if not data:
             continue
-        cam = cam_by_id.get(cid)
-        if cam:
-            start_camera_media(cam, data, o.get(f"video_{channel}_name") or "preset")
+        start_camera_media(cam, data, o.get(f"video_{channel}_name") or "preset",
+                            state_suffix=f"_{channel}")
 
 
 def _cleanup_removed_cameras(cameras: list[dict]) -> None:
@@ -57,7 +65,8 @@ def _cleanup_removed_cameras(cameras: list[dict]) -> None:
     prev_ids = set(ss.get("_prev_camera_ids", []))
     curr_ids = {c["id"] for c in cameras}
     for cid in prev_ids - curr_ids:  # 예: 9칸 → 4칸으로 줄여 사라진 cam5~cam9만 골라 정리
-        reset_cam_state(cid)
+        reset_cam_state(cid, state_suffix="_eo")
+        reset_cam_state(cid, state_suffix="_tir")
     ss["_prev_camera_ids"] = list(curr_ids)  # 다음 렌더에서 비교할 수 있도록 현재 목록을 저장해둠
 
 

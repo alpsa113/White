@@ -1,0 +1,30 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -m py_compile ui/camera/detection_panel.py views/dashboard.py)",
+      "Bash(python -c \"import streamlit; print\\(streamlit.__version__\\)\")",
+      "Bash(python \"C:\\\\Users\\\\hoony\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-hoony-KDT-Hanhwa-Workspaces-project-final-gop-detection-0710-test\\\\18d7a71a-2737-49ec-a18d-926bf73a9060\\\\scratchpad\\\\verify_dashboard.py\")",
+      "Bash(python \"C:\\\\Users\\\\hoony\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-hoony-KDT-Hanhwa-Workspaces-project-final-gop-detection-0710-test\\\\18d7a71a-2737-49ec-a18d-926bf73a9060\\\\scratchpad\\\\render_cards_preview.py\")",
+      "Bash(python -c ' *)",
+      "Bash(python -c \"import pandas; print\\(pandas.__version__\\)\")",
+      "Bash(python -m py_compile views/dashboard.py ui/camera/toolbar.py ui/camera/spotlight.py ui/outposts/viewer.py ui/log_tabs.py)",
+      "Bash(python -m py_compile views/dashboard.py ui/camera/toolbar.py ui/camera/card.py ui/camera/zoom.py ui/outposts/viewer.py ui/outposts/marker_overlay.py ui/outposts/editor.py)",
+      "Bash(python -m py_compile state.py views/logs.py ui/log_tabs.py)",
+      "Bash(python -m py_compile ui/camera/card.py ui/outposts/marker_overlay.py)",
+      "Bash(python -m py_compile views/dashboard.py views/logs.py ui/log_tabs.py ui/camera/toolbar.py ui/camera/card.py ui/camera/zoom.py ui/outposts/viewer.py ui/outposts/marker_overlay.py ui/outposts/editor.py state.py)",
+      "Bash(python -m py_compile app.py views/dashboard.py ui/camera/spotlight.py ui/camera/card.py services/playback.py state.py ui/camera/detection_panel.py)",
+      "Bash(python -m py_compile app.py views/dashboard.py ui/camera/spotlight.py ui/camera/card.py services/playback.py state.py ui/camera/detection_panel.py ui/camera/toolbar.py ui/outposts/viewer.py ui/outposts/marker_overlay.py ui/log_tabs.py views/logs.py)",
+      "Bash(pip install *)",
+      "Bash(python -m py_compile ui/camera/toolbar.py views/dashboard.py services/playback.py)",
+      "Bash(python -m py_compile services/playback.py services/clip_recorder.py)",
+      "Bash(python -m py_compile services/camera_registry.py)",
+      "Bash(python -m py_compile services/outposts.py)",
+      "Bash(python -m py_compile ui/camera/card.py)",
+      "Bash(python -m py_compile app.py views/dashboard.py ui/camera/toolbar.py ui/camera/grid.py ui/camera/spotlight.py ui/camera/card.py services/playback.py services/clip_recorder.py services/camera_registry.py services/outposts.py)",
+      "Bash(python -m py_compile services/playback.py)",
+      "Bash(python -m py_compile ui/outposts/editor.py views/logs.py services/playback.py)",
+      "Bash(python -m py_compile ui/layout.py services/tracking.py)",
+      "Bash(python -m py_compile ui/camera/toolbar.py views/dashboard.py)"
+    ]
+  }
+}
