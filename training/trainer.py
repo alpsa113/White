@@ -75,6 +75,7 @@ class Trainer:
             loss_kwargs["aux_weight"] = self.cfg.aux_weight
         if self.cfg.fus_reg_weight is not None:
             loss_kwargs["fus_reg_weight"] = self.cfg.fus_reg_weight
+        loss_kwargs["empty_obj_weight"] = self.cfg.empty_objectness_weight
         self.criterion = DualYOLOLoss(**loss_kwargs).to(self.device)
 
         self.scaler = torch.cuda.amp.GradScaler(enabled=amp and self.device.type == "cuda")
@@ -296,7 +297,7 @@ class Trainer:
             num_classes=4,
             iou_thresh=0.5,
             iou_thresholds=[x / 100 for x in range(50, 100, 5)],
-            operating_conf=0.25,
+            operating_conf=0.45,
         )
         for batch in self.val_loader:
             batch = self._to_device(batch)

@@ -30,8 +30,8 @@ def get_predictor() -> DualYOLOPredictor:
 def predict_image_arrays(
     rgb_image=None,
     thermal_image=None,
-    conf: float = 0.25,
-    nms: float = 0.6,
+    conf: float = 0.45,
+    nms: float = 0.4,
 ) -> dict:
     predictor = get_predictor()
     old_conf = predictor.conf_thresh
@@ -52,13 +52,13 @@ def predict_image_arrays(
 def predict_video_files(
     rgb_video_path=None,
     thermal_video_path=None,
-    conf=0.25,
-    nms=0.6,
+    conf=0.45,
+    nms=0.4,
     frame_stride=5,
     max_frames=None,
     use_tracking=False,
-    track_high_thresh=0.25,
-    track_low_thresh=0.10,
+    track_high_thresh=0.45,
+    track_low_thresh=0.20,
     track_match_thresh=0.35,
     track_buffer=8,
     track_smooth_alpha=0.7,

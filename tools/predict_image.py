@@ -44,8 +44,8 @@ def main():
     parser.add_argument("--output", default=None, help="bbox 시각화 이미지 저장 경로")
     parser.add_argument("--json", default=None, help="추론 결과 JSON 저장 경로")
     parser.add_argument("--device", default=None)
-    parser.add_argument("--conf", type=float, default=0.25)
-    parser.add_argument("--nms", type=float, default=0.6)
+    parser.add_argument("--conf", type=float, default=0.45)
+    parser.add_argument("--nms", type=float, default=0.4)
     args = parser.parse_args()
 
     if not args.rgb and not args.thermal:

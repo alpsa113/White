@@ -104,6 +104,7 @@ class DetectionLoss(nn.Module):
         cls_weight: float = 1.0,
         reg_weight: float = 5.0,
         obj_weight: float = 1.0,
+        empty_obj_weight: float = 1.0,
         class_weights: torch.Tensor | None = None,
     ):
         super().__init__()
@@ -112,6 +113,7 @@ class DetectionLoss(nn.Module):
         self.cls_w = cls_weight
         self.reg_w = reg_weight
         self.obj_w = obj_weight
+        self.empty_obj_w = max(float(empty_obj_weight), 1.0)
         self.register_buffer(
             "class_weights",
             class_weights if class_weights is not None
@@ -180,9 +182,19 @@ class DetectionLoss(nn.Module):
 
         # --- 객체성 손실(전체 위치) ---
         obj_tgt = obj_mask.float().unsqueeze(1)  # [B, 1, H, W]
-        loss_obj = F.binary_cross_entropy_with_logits(
-            obj_p, obj_tgt, pos_weight=torch.tensor(5.0, device=device)
+        obj_loss_map = F.binary_cross_entropy_with_logits(
+            obj_p,
+            obj_tgt,
+            pos_weight=torch.tensor(5.0, device=device),
+            reduction="none",
         )
+        empty_mask = torch.tensor(
+            [boxes.numel() == 0 for boxes in gt_boxes],
+            dtype=obj_loss_map.dtype,
+            device=device,
+        ).view(B, 1, 1, 1)
+        sample_weights = 1.0 + empty_mask * (self.empty_obj_w - 1.0)
+        loss_obj = (obj_loss_map * sample_weights).mean()
 
         n_pos = obj_mask.sum().clamp(min=1)
 
@@ -285,6 +297,7 @@ class DualYOLOLoss(nn.Module):
         unc_weight: float = 1.0,
         fus_reg_weight: float = 0.1,
         class_weights: torch.Tensor | None = None,
+        empty_obj_weight: float = 1.0,
     ):
         super().__init__()
         self.aux_w = aux_weight
@@ -295,6 +308,7 @@ class DualYOLOLoss(nn.Module):
             s: DetectionLoss(
                 stride=stride,
                 num_classes=num_classes,
+                empty_obj_weight=empty_obj_weight,
                 class_weights=class_weights,
             )
             for s, stride in self.STRIDES.items()

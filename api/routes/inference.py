@@ -19,8 +19,8 @@ router = APIRouter(prefix="/predict", tags=["predict"])
 async def predict_image(
     rgb_file: UploadFile | None = File(default=None),
     thermal_file: UploadFile | None = File(default=None),
-    conf: float = Query(default=0.25, ge=0.0, le=1.0),
-    nms: float = Query(default=0.6, ge=0.0, le=1.0),
+    conf: float = Query(default=0.45, ge=0.0, le=1.0),
+    nms: float = Query(default=0.4, ge=0.0, le=1.0),
 ):
     if rgb_file is None and thermal_file is None:
         raise HTTPException(
@@ -63,13 +63,13 @@ async def predict_image(
 async def predict_video_endpoint(
     rgb_video: UploadFile | None = File(default=None),
     thermal_video: UploadFile | None = File(default=None),
-    conf: float = Query(default=0.25, ge=0.0, le=1.0),
-    nms: float = Query(default=0.6, ge=0.0, le=1.0),
+    conf: float = Query(default=0.45, ge=0.0, le=1.0),
+    nms: float = Query(default=0.4, ge=0.0, le=1.0),
     frame_stride: int = Query(default=5, ge=1),
     max_frames: int | None = Query(default=None, ge=1),
     track: bool = Query(default=False),
-    track_high_thresh: float = Query(default=0.25, ge=0.0, le=1.0),
-    track_low_thresh: float = Query(default=0.10, ge=0.0, le=1.0),
+    track_high_thresh: float = Query(default=0.45, ge=0.0, le=1.0),
+    track_low_thresh: float = Query(default=0.20, ge=0.0, le=1.0),
     track_match_thresh: float = Query(default=0.35, ge=0.0, le=1.0),
     track_buffer: int = Query(default=8, ge=0),
     track_smooth_alpha: float = Query(default=0.7, ge=0.0, le=1.0),

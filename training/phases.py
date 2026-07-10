@@ -35,6 +35,7 @@ class PhaseConfig:
     # 손실 가중치 오버라이드(None이면 DualYOLOLoss 기본값 사용)
     aux_weight: float | None = None
     fus_reg_weight: float | None = None
+    empty_objectness_weight: float = 1.0
 
     # 클래스 가중치 (index: person=0, boar=1, deer=2, non_target=3)
     class_weights: list[float] = field(default_factory=lambda: [1.0, 1.0, 1.0, 0.1])
