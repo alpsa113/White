@@ -29,21 +29,25 @@ def reset_cam_state(cid: str, state_suffix: str = "") -> None:
         if cap is not None:
             cap.release()
 
-    if key("tmp_path") in st.session_state:
+    # tmp_path가 이 함수가 직접 만든 임시파일일 때만 삭제합니다(외부 소유 경로는 보존).
+    if key("tmp_path") in st.session_state and st.session_state.get(key("tmp_path_owned"), True):
         try:
             os.remove(st.session_state[key("tmp_path")])
         except Exception:
             pass
 
-    for k in ("cap", "tmp_path", "cursor", "total_frames", "playing", "finished",
+    for k in ("cap", "tmp_path", "tmp_path_owned", "cursor", "total_frames", "playing", "finished",
               "result", "person_tracks", "animal_tracks", "animals_visible", "last_dets", "last_toasts", "fp",
               "fps", "play_start_wall", "play_start_frame", "last_detect_time", "progress",
-              "frame_buffer", "pending_clips"):
+              "frame_buffer", "pending_clips", "stream_start_frame"):
         st.session_state.pop(key(k), None)
 
 
-def start_camera_media(cam: dict, data: bytes, filename: str, state_suffix: str = "") -> str:
+def start_camera_media(cam: dict, data: bytes | None, filename: str, state_suffix: str = "",
+                        src_path: str | None = None) -> str:
     """카메라 채널에 미디어를 반영합니다. 이미 같은 파일이면 "unchanged"를 반환해 재생 위치를 보존합니다.
+    src_path가 있으면(예: 초소에 매핑된 영상) 그 파일을 그대로 열어 재사용하고, 세션 메모리에
+    바이트를 따로 들고 있거나 디스크에 한 번 더 복사하지 않습니다.
 
     반환값: "video" | "image" | "unchanged" | "unsupported" | "no_cv2"
     """
@@ -51,7 +55,7 @@ def start_camera_media(cam: dict, data: bytes, filename: str, state_suffix: str 
     cid = cam["id"]
     key = lambda name: f"{name}_{cid}{state_suffix}"
 
-    fp = (filename, len(data))
+    fp = (filename, src_path) if src_path else (filename, len(data or b""))
     if ss.get(key("fp")) == fp:
         return "unchanged"
 
@@ -62,9 +66,14 @@ def start_camera_media(cam: dict, data: bytes, filename: str, state_suffix: str 
     if ext in VIDEO_EXTS:
         if not HAS_CV2:
             return "no_cv2"
-        with tempfile.NamedTemporaryFile(suffix="." + ext, delete=False) as tmp:
-            tmp.write(data)
-            ss[key("tmp_path")] = tmp.name
+        if src_path:
+            ss[key("tmp_path")] = src_path
+            ss[key("tmp_path_owned")] = False
+        else:
+            with tempfile.NamedTemporaryFile(suffix="." + ext, delete=False) as tmp:
+                tmp.write(data)
+                ss[key("tmp_path")] = tmp.name
+            ss[key("tmp_path_owned")] = True
 
         cap = cv2.VideoCapture(ss[key("tmp_path")])
         ss[key("cap")] = cap
@@ -154,16 +163,19 @@ def run_playback_loop(active_cams: list[dict], video_slots: dict) -> None:
                 ss.pop(f"person_tracks_{channel_cid}", None)
                 ss.pop(f"animal_tracks_{channel_cid}", None)
                 ss.pop(f"last_dets_{channel_cid}", None)
-                ss.pop(f"frame_buffer_{channel_cid}", None)
 
             if total_frames and target_frame >= total_frames:
                 _restart_loop()
                 target_frame = 0
 
-            frames_to_advance = min(max(1, target_frame - cursor), 30)
+            frames_to_advance = min(target_frame - cursor, 30)
+            if frames_to_advance <= 0:
+                continue
 
             # 메모리 부족 시 cv2.read()가 예외를 던질 수 있어 카메라 단위로만 격리
-            frame = None
+            # 한 번에 여러 프레임을 따라잡을 때도(frames_to_advance > 1) 클립이 끊기지
+            # 않도록, 건너뛰지 않고 batch_frames에 전부 모아 클립 버퍼에 반영합니다.
+            batch_frames = []
             try:
                 for _ in range(frames_to_advance):
                     ret, frame = cap.read()
@@ -174,11 +186,15 @@ def run_playback_loop(active_cams: list[dict], video_slots: dict) -> None:
                         ret, frame = cap.read()
                         if ret:
                             cursor = 1
+                            batch_frames = [frame]
+                        else:
+                            batch_frames = []
                         break
+                    batch_frames.append(frame)
             except (cv2.error, SystemError, MemoryError):
-                frame = None
+                batch_frames = []
 
-            if frame is None:
+            if not batch_frames:
                 ss[key("playing")] = False
                 ss[key("finished")] = True
                 continue
@@ -186,13 +202,16 @@ def run_playback_loop(active_cams: list[dict], video_slots: dict) -> None:
             frames_processed += 1
             ss[key("cursor")] = cursor
             ts_ms = cap.get(cv2.CAP_PROP_POS_MSEC)
-            video_time = cursor / fps if fps else now
 
-            height, width = frame.shape[:2]
-            if width > 1080:
-                height = int(height * 1080 / width)
-                frame = cv2.resize(frame, (1080, height))
-            rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            # 배치의 모든 프레임에 동일한 리사이즈를 적용해야 클립 프레임 크기가 일정하게 유지됩니다
+            # (마지막 프레임에만 적용하면 프레임마다 크기가 미세하게 달라져 인코딩이 실패합니다).
+            src_height, src_width = batch_frames[0].shape[:2]
+            if src_width > 1080:
+                cap_height = int(src_height * 1080 / src_width)
+                batch_frames = [cv2.resize(f, (1080, cap_height)) for f in batch_frames]
+
+            last_frame = batch_frames[-1]
+            rgb = cv2.cvtColor(last_frame, cv2.COLOR_BGR2RGB)
             pil_img = Image.fromarray(rgb)
 
             # 탐지/트래킹/클립 상태를 채널별로 격리하기 위한 가상 카메라
@@ -212,10 +231,19 @@ def run_playback_loop(active_cams: list[dict], video_slots: dict) -> None:
 
             annotated = draw_boxes(pil_img, dets)
 
-            clip_frame = _downscale_for_clip(np.array(annotated))
-            push_frame_buffer(channel_cid, clip_frame, video_time)
-            start_pending_clips(tracking_cam, new_alert_ids, video_time)
-            append_pending_clips(channel_cid, clip_frame, video_time)
+            start_pending_clips(tracking_cam, new_alert_ids, now)
+
+            n = len(batch_frames)
+            for i, raw in enumerate(batch_frames):
+                frame_time = now - (n - 1 - i) / fps
+                if i == n - 1:
+                    frame_annotated = annotated
+                else:
+                    raw_rgb = cv2.cvtColor(raw, cv2.COLOR_BGR2RGB)
+                    frame_annotated = draw_boxes(Image.fromarray(raw_rgb), dets)
+                clip_frame = _downscale_for_clip(np.array(frame_annotated))
+                push_frame_buffer(channel_cid, clip_frame, frame_time)
+                append_pending_clips(channel_cid, clip_frame, frame_time)
 
             ss[key("result")] = annotated
             if cid in video_slots:

@@ -8,12 +8,15 @@ from ui.camera.spotlight import render_camera_spotlight
 from ui.camera.detection_panel import render_detection_panel
 from ui.outposts.marker_overlay import selected_ids
 from ui.outposts.viewer import render_map
+from ui.styles import DASHBOARD_FIXED_PAGE_CSS, DASHBOARD_PANEL_COL_CSS
 
 
 def render(cameras: list[dict]) -> dict:
     """관제 대시보드 페이지 전체를 렌더링하고, 채운 video_slots를 반환합니다(재생 루프는 app.py가 호출)."""
     consume_pending_camera_switch()
     get_valid_area_options(cameras)
+
+    st.markdown(DASHBOARD_FIXED_PAGE_CSS, unsafe_allow_html=True)
 
     video_slots = {}
 
@@ -25,21 +28,20 @@ def render(cameras: list[dict]) -> dict:
         map_selected = selected_ids()
         if map_selected:
             filtered = [c for c in cameras if c["id"] in map_selected] or cameras
-            render_camera_grid(filtered, video_slots, cols_per_row=compute_grid_columns(len(filtered)))
+            render_camera_grid(
+                filtered, video_slots, cols_per_row=compute_grid_columns(len(filtered)), focused=True
+            )
         elif st.session_state["selected_cam"] == "전체 구역":
             render_camera_grid(cameras, video_slots, cols_per_row=compute_grid_columns(len(cameras)))
         else:
             render_camera_spotlight(cameras, st.session_state["selected_cam"], video_slots)
 
     with panel_col:
-        with st.container(key="minimap_section"):
-            st.markdown(
-                '<style>div[class*="st-key-minimap_section"] '
-                'div[data-testid="stVerticalBlock"] { gap: 0.15rem !important; }</style>',
-                unsafe_allow_html=True,
-            )
-            st.markdown("**초소 위치**")
-            render_map(cameras)
-        render_detection_panel()
+        st.markdown(DASHBOARD_PANEL_COL_CSS, unsafe_allow_html=True)
+        with st.container(key="panel_col_wrap"):
+            with st.container(key="minimap_section"):
+                st.markdown("**초소 위치**")
+                render_map(cameras)
+            render_detection_panel()
 
     return video_slots

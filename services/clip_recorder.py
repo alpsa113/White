@@ -75,7 +75,12 @@ def _finalize_clip_async(pc: dict) -> None:
         try:
             _finalize_clip(pc)
         finally:
-            st.session_state["_clip_ready_flag"] = st.session_state.get("_clip_ready_flag", 0) + 1
+            # 스크립트 실행이 이미 끝난 뒤(rerun 등)라면 session_state 접근이 예외를
+            # 던질 수 있어, 인코딩 실패 자체가 스레드를 비정상 종료시키지 않게 감쌉니다.
+            try:
+                st.session_state["_clip_ready_flag"] = st.session_state.get("_clip_ready_flag", 0) + 1
+            except Exception:
+                pass
 
     thread = threading.Thread(target=_run, daemon=True)
     if ctx is not None:
@@ -113,7 +118,10 @@ def _finalize_clip(pc: dict) -> None:
         if key:
             _apply_clip_to_log(pc["aid"], key)
     except Exception as e:
-        st.session_state["db_write_warning"] = f"클립 인코딩 실패 (탐지 ID {pc.get('aid')}): {e}"
+        try:
+            st.session_state["db_write_warning"] = f"클립 인코딩 실패 (탐지 ID {pc.get('aid')}): {e}"
+        except Exception:
+            pass
     finally:
         try:
             os.remove(clip_path)

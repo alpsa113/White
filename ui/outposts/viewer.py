@@ -5,7 +5,10 @@ import streamlit as st
 from PIL import Image
 
 from services import outposts as outposts_service
-from ui.outposts.marker_overlay import BLINK_CSS, MAP_WRAP_KEY, render_marker, render_stop_icon, selected_ids
+from ui.outposts.marker_overlay import (
+    BLINK_CSS, MAP_WRAP_KEY, render_marker, render_stop_icon, selected_ids, visible_camera_ids,
+)
+from ui.styles import MAP_WRAP_CSS_TEMPLATE
 
 
 def render_map(cameras: list[dict]) -> None:
@@ -28,24 +31,12 @@ def render_map(cameras: list[dict]) -> None:
 
     cam_name_by_id = {c["id"]: c["name"] for c in cameras}
     st.markdown(BLINK_CSS, unsafe_allow_html=True)
-    st.markdown(f"""
-    <style>
-    div[class*="st-key-{MAP_WRAP_KEY}"] {{
-        position: relative;
-        width: 100%;
-        aspect-ratio: {img_w} / {img_h};
-        overflow: hidden;
-        border-radius: 4px;
-        container-type: inline-size;
-    }}
-    div[class*="st-key-{MAP_WRAP_KEY}"] img {{
-        width: 100% !important;
-        height: 100% !important;
-        object-fit: contain;
-        display: block;
-    }}
-    </style>
-    """, unsafe_allow_html=True)
+    st.markdown(
+        MAP_WRAP_CSS_TEMPLATE.format(wrap_key=MAP_WRAP_KEY, img_w=img_w, img_h=img_h),
+        unsafe_allow_html=True,
+    )
+
+    visible_ids = visible_camera_ids(cameras)
 
     with st.container(key=MAP_WRAP_KEY):
         st.image(img, use_container_width=True)
@@ -62,7 +53,8 @@ def render_map(cameras: list[dict]) -> None:
 
             is_selected = cid in selected_ids()
             render_marker(cid, o["x_ratio"], o["y_ratio"], number=i + 1,
-                          selected=is_selected, blinking=is_blinking, label=cam_name)
+                          selected=is_selected, checked=cid in visible_ids,
+                          blinking=is_blinking, label=cam_name)
 
             if is_blinking:
                 render_stop_icon(cid, label=cam_name)

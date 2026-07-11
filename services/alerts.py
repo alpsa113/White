@@ -7,7 +7,16 @@ from PIL import Image
 
 import db_rds as db
 import s3_storage as s3
-from config import FALLBACK_CONF_THRESH, FALLBACK_NMS_THRESH
+from config import FALLBACK_CONF_THRESH, FALLBACK_NMS_THRESH, CLIP_STORAGE_MAX_WIDTH
+
+
+def _shrink_for_memory(img: Image.Image) -> Image.Image:
+    """S3 미보관 시 세션에 계속 남는 스냅샷 원본을 CLIP_STORAGE_MAX_WIDTH 이하로 축소합니다.
+    S3 업로드는 이 함수 호출 전 원본 해상도로 이미 끝난 뒤라 화질에는 영향이 없습니다."""
+    if img.width <= CLIP_STORAGE_MAX_WIDTH:
+        return img
+    new_height = int(img.height * CLIP_STORAGE_MAX_WIDTH / img.width)
+    return img.resize((CLIP_STORAGE_MAX_WIDTH, new_height))
 
 
 def create_detection_alert(cam_name: str, class_name: str, conf: float, frames: int,
@@ -71,8 +80,8 @@ def create_detection_alert(cam_name: str, class_name: str, conf: float, frames: 
         ss.next_alert_id += 1
 
     record["id"] = aid
-    # S3 업로드 성공 시 메모리 스냅샷은 보관하지 않음(중복 방지)
-    record["snapshot"] = None if image_key else snapshot
+    # S3 업로드 성공 시 메모리 스냅샷은 보관하지 않음(중복 방지). 미보관 시에도 원본 대신 축소본만 듭니다.
+    record["snapshot"] = None if image_key else (_shrink_for_memory(snapshot) if snapshot is not None else None)
     ss.detection_logs.append(record)
     return aid
 
@@ -87,5 +96,5 @@ def update_detection_alert(aid: int, conf: float, frames: int, snapshot: Image.I
             a["hit_frames"] = frames
             if snapshot is not None:
                 has_persisted_copy = s3_enabled and bool(a.get("image_path") or a.get("uri"))
-                a["snapshot"] = None if has_persisted_copy else snapshot
+                a["snapshot"] = None if has_persisted_copy else _shrink_for_memory(snapshot)
             break

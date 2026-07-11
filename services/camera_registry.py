@@ -29,11 +29,11 @@ def _sync_preset_media(outposts: list[dict], cameras: list[dict]) -> None:
         channel = ss.get(f"active_channel_{cid}", "eo")
         if ss.get(f"fp_{cid}_{channel}") is not None:
             continue
-        data = o.get(f"video_{channel}_bytes")
-        if not data:
+        path = o.get(f"video_{channel}_path")
+        if not path:
             continue
-        start_camera_media(cam, data, o.get(f"video_{channel}_name") or "preset",
-                            state_suffix=f"_{channel}")
+        start_camera_media(cam, None, o.get(f"video_{channel}_name") or "preset",
+                            state_suffix=f"_{channel}", src_path=path)
 
 
 def _cleanup_removed_cameras(cameras: list[dict]) -> None:

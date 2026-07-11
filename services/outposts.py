@@ -1,4 +1,7 @@
 """services/outposts.py — 초소(지도 마커) 관리 및 카메라 목록 변환. 화면 렌더링은 포함하지 않습니다."""
+import os
+import tempfile
+
 import streamlit as st
 
 from config import PRESET_MAP_IMAGE_PATH
@@ -38,20 +41,24 @@ def add_marker(x_ratio: float, y_ratio: float) -> str:
         "y_ratio": y_ratio,
         "info": "",
         "source": "",
-        "video_eo_bytes": None, "video_eo_name": "",
-        "video_tir_bytes": None, "video_tir_name": "",
+        "video_eo_path": None, "video_eo_name": "",
+        "video_tir_path": None, "video_tir_name": "",
     })
     return marker_id
 
 
 def remove_marker(marker_id: str) -> None:
-    """초소 마커 1개를 삭제하고, EO/TIR 재생 리소스와 선택 상태를 정리합니다."""
+    """초소 마커 1개를 삭제하고, EO/TIR 재생 리소스·영상 임시파일·선택 상태를 정리합니다."""
     from services.playback import reset_cam_state
 
     ss = st.session_state
+    target = next((o for o in get_outposts() if o["id"] == marker_id), None)
     ss["outposts"] = [o for o in get_outposts() if o["id"] != marker_id]
     reset_cam_state(marker_id, state_suffix="_eo")
     reset_cam_state(marker_id, state_suffix="_tir")
+    if target:
+        for ch in ("eo", "tir"):
+            _remove_file(target.get(f"video_{ch}_path"))
 
     selected = set(ss.get("_map_selected_cam_ids", []))
     if marker_id in selected:
@@ -70,13 +77,29 @@ def update_marker(marker_id: str, *, info: str | None = None, source: str | None
             break
 
 
+def _remove_file(path: str | None) -> None:
+    if path:
+        try:
+            os.remove(path)
+        except Exception:
+            pass
+
+
 def set_marker_video(marker_id: str, channel: str, data: bytes, filename: str) -> None:
-    """초소에 CCTV 영상을 채널별(EO/TIR)로 매핑합니다. 현재 재생 중인 채널이면 즉시 재초기화합니다."""
+    """초소에 CCTV 영상을 채널별(EO/TIR)로 매핑합니다. 세션 메모리에 원본 바이트를 들고 있지 않도록
+    디스크에 1회만 저장하고 경로만 보관합니다(재생 시 그 경로를 그대로 읽습니다).
+    현재 재생 중인 채널이면 즉시 재초기화합니다."""
     assert channel in ("eo", "tir"), f"알 수 없는 채널: {channel}"
+
+    ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else "mp4"
+    with tempfile.NamedTemporaryFile(suffix="." + ext, delete=False) as tmp:
+        tmp.write(data)
+        new_path = tmp.name
 
     for o in get_outposts():
         if o["id"] == marker_id:
-            o[f"video_{channel}_bytes"] = data
+            _remove_file(o.get(f"video_{channel}_path"))
+            o[f"video_{channel}_path"] = new_path
             o[f"video_{channel}_name"] = filename
             active = st.session_state.get(f"active_channel_{marker_id}", "eo")
             if channel == active:
@@ -85,14 +108,14 @@ def set_marker_video(marker_id: str, channel: str, data: bytes, filename: str) -
             break
 
 
-def get_marker_video(marker_id: str, channel: str) -> tuple[bytes, str] | None:
-    """초소에 매핑된 채널별 영상(바이트, 파일명)을 반환합니다. 없으면 None."""
+def get_marker_video(marker_id: str, channel: str) -> tuple[str, str] | None:
+    """초소에 매핑된 채널별 영상(파일 경로, 파일명)을 반환합니다. 없으면 None."""
     assert channel in ("eo", "tir"), f"알 수 없는 채널: {channel}"
     for o in get_outposts():
         if o["id"] == marker_id:
-            data = o.get(f"video_{channel}_bytes")
-            if data:
-                return data, o.get(f"video_{channel}_name", "")
+            path = o.get(f"video_{channel}_path")
+            if path:
+                return path, o.get(f"video_{channel}_name", "")
     return None
 
 

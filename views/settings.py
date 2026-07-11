@@ -2,12 +2,15 @@
 import streamlit as st
 
 from ui.outposts.editor import render_outpost_editor
+from ui.styles import PAGE_PADDING_CSS
 
 
 def render() -> None:
     """설정 페이지 전체를 렌더링합니다."""
     ss = st.session_state
     is_admin = ss.get("role") == "admin"
+
+    st.markdown(PAGE_PADDING_CSS, unsafe_allow_html=True)
 
     render_outpost_editor()
 

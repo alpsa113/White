@@ -8,27 +8,38 @@ from streamlit_image_coordinates import streamlit_image_coordinates
 
 from config import VIDEO_EXTS
 from services import outposts as outposts_service
-from ui.outposts.marker_overlay import DEFAULT_COLOR, SELECTED_COLOR, selected_ids
+from ui.outposts.marker_overlay import DEFAULT_COLOR
+
+# OS별 굵은 글꼴 후보 — 하나라도 있으면 사용, 전부 없으면 PIL 기본(작은) 폰트로 폴백
+_BOLD_FONT_CANDIDATES = [
+    r"C:\Windows\Fonts\malgunbd.ttf",
+    r"C:\Windows\Fonts\arialbd.ttf",
+    "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+    "/System/Library/Fonts/Supplemental/Arial Bold.ttf",
+]
 
 
-def _draw_markers(base_img: Image.Image, outposts: list[dict], selected: set) -> Image.Image:
-    """지도 이미지 위에 번호 매긴 원으로 마커를 그려 넣습니다(선택된 마커는 빨간색)."""
+def _load_bold_font(size: int) -> ImageFont.FreeTypeFont:
+    for path in _BOLD_FONT_CANDIDATES:
+        try:
+            return ImageFont.truetype(path, size)
+        except Exception:
+            continue
+    return ImageFont.load_default()
+
+
+def _draw_markers(base_img: Image.Image, outposts: list[dict]) -> Image.Image:
+    """지도 이미지 위에 번호 매긴 원으로 마커를 그려 넣습니다."""
     img = base_img.convert("RGB").copy()
     draw = ImageDraw.Draw(img)
     w, h = img.size
     radius = max(16, min(w, h) // 32)
-    try:
-        font = ImageFont.truetype(
-            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", max(18, int(radius * 1.3))
-        )
-    except Exception:
-        font = ImageFont.load_default()
+    font = _load_bold_font(max(18, int(radius * 1.3)))
 
     for i, o in enumerate(outposts):
         cx, cy = o["x_ratio"] * w, o["y_ratio"] * h
-        color = SELECTED_COLOR if o["id"] in selected else DEFAULT_COLOR
         draw.ellipse([cx - radius, cy - radius, cx + radius, cy + radius],
-                     fill=color, outline="white", width=3)
+                     fill=DEFAULT_COLOR, outline="white", width=3)
         label = str(i + 1)
         bbox = draw.textbbox((0, 0), label, font=font)
         tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
@@ -68,15 +79,15 @@ def render_outpost_editor() -> None:
         st.caption("현재 등록된 초소 위치와 정보를 조회할 수 있습니다 (조회 전용).")
 
     outposts = outposts_service.get_outposts()
-    cam_name_by_id = {c["id"]: c["name"] for c in outposts_service.to_camera_list(outposts)}
-    selected = selected_ids()
+    cameras = outposts_service.to_camera_list(outposts)
+    cam_name_by_id = {c["id"]: c["name"] for c in cameras}
 
     map_col, list_col = st.columns([3, 2])
 
     with map_col:
         map_bytes = outposts_service.get_map_image_bytes()
         base_img = Image.open(io.BytesIO(map_bytes))
-        preview = _draw_markers(base_img, outposts, selected)
+        preview = _draw_markers(base_img, outposts)
 
         if is_admin:
             st.markdown("**지도 미리보기** (클릭하여 마커 추가)")
@@ -123,10 +134,6 @@ def _render_row_admin(i: int, m: dict, cid: str, cam_name: str) -> None:
         with st.popover("🎬"):
             st.caption(f"{outposts_service.cctv_no(i)} 영상 매핑")
 
-            source = st.text_input(
-                "영상 소스 (메모)", value=m.get("source", ""), key=f"_op_source_{cid}",
-            )
-
             eo_video = outposts_service.get_marker_video(cid, "eo")
             st.caption(f"EO(가시광): {'✅ ' + eo_video[1] if eo_video else '⚠️ 매핑된 영상 없음'}")
             eo_upload = st.file_uploader(
@@ -140,7 +147,6 @@ def _render_row_admin(i: int, m: dict, cid: str, cam_name: str) -> None:
             )
 
             if st.button("저장", key=f"_op_save_{cid}", use_container_width=True):
-                outposts_service.update_marker(cid, source=source)
                 if eo_upload is not None:
                     outposts_service.set_marker_video(cid, "eo", eo_upload.getvalue(), eo_upload.name)
                 if tir_upload is not None:

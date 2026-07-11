@@ -87,14 +87,16 @@ def health():
 
 
 @app.get("/stream")
-def stream(path: str, fps: float = 30.0, detect_every: float = 0.3):
-    """영상 파일을 실시간 속도로 읽어 박스를 그려 MJPEG 스트림으로 전송합니다."""
+def stream(path: str, fps: float = 30.0, detect_every: float = 0.3, start_frame: int = 0):
+    """영상 파일을 실시간 속도로 읽어 박스를 그려 MJPEG 스트림으로 전송합니다. start_frame이 있으면 그 지점부터 재생합니다."""
     video_path = unquote(path)
 
     def _generate():
         cap = cv2.VideoCapture(video_path)
         if not cap.isOpened():
             return
+        if start_frame > 0:
+            cap.set(cv2.CAP_PROP_POS_FRAMES, start_frame)
         video_fps = cap.get(cv2.CAP_PROP_FPS) or fps
         frame_interval = 1.0 / video_fps
 

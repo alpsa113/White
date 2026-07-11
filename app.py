@@ -3,6 +3,7 @@ import streamlit as st
 
 from state import init_session_state
 from ui.layout import render_sidebar
+from ui.outposts.marker_overlay import stop_all_blinking
 from views import login, dashboard, logs, settings
 from services.camera_registry import get_active_cameras
 from services.playback import run_playback_loop
@@ -12,6 +13,13 @@ st.set_page_config(page_title="GOP 통합 감시 시스템", layout="wide", init
 init_session_state()
 
 ss = st.session_state
+
+# 이 rerun이 재생 루프의 자동 갱신이 아니라 사용자 조작(버튼 클릭 등)으로 발생했다면,
+# 사람 탐지로 인한 마커 점멸을 모두 멈춥니다.
+if ss.pop("_auto_rerun_pending", False):
+    pass
+else:
+    stop_all_blinking()
 
 if not ss.authenticated:
     login.render()
@@ -43,4 +51,5 @@ active_cams = [cam for cam in cameras if _is_active_channel_playing(cam)]
 
 if active_cams:
     run_playback_loop(active_cams, video_slots)
+    ss["_auto_rerun_pending"] = True
     st.rerun()

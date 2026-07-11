@@ -1,17 +1,6 @@
 """ui/camera/zoom.py — 카메라 화면 확대/이동(마우스 휠·드래그) 기능. 집중 보기에서만 활성화됩니다."""
 import streamlit.components.v1 as components
 
-# img_wrap 위치 기준 스타일 — ui/camera/card.py가 {cid}를 채워 사용
-IMG_WRAP_CSS_TEMPLATE = """
-<style>
-div[class*="st-key-img_wrap_{cid}"] {{
-    position: relative;
-    overflow: hidden;
-    border-radius: 4px;
-}}
-</style>
-"""
-
 
 def inject_live_zoom_script(cid: str) -> None:
     """영상 영역(img_wrap_{cid})에 마우스 휠 확대/축소, 드래그 이동 기능을 심습니다."""
@@ -86,6 +75,25 @@ def inject_live_zoom_script(cid: str) -> None:
             doc['_zoomMouseUp_' + key] = onMouseUp;
         }};
         trySetup();
+    }})();
+    </script>
+    """, height=0)
+
+
+def inject_reset_zoom_script(cid: str) -> None:
+    """확대/이동 상태를 초기화합니다(이미지가 아직 DOM에 없으면 나타날 때까지 재시도)."""
+    components.html(f"""
+    <script>
+    (function() {{
+        const doc = window.parent.document;
+        const key = "{cid}";
+        const tryReset = () => {{
+            const wrap = doc.querySelector('div[class*="st-key-img_wrap_' + key + '"]');
+            const img = wrap ? wrap.querySelector('img') : null;
+            if (!img) return setTimeout(tryReset, 100);
+            img.style.transform = 'none';
+        }};
+        tryReset();
     }})();
     </script>
     """, height=0)

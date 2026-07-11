@@ -1,19 +1,34 @@
 """views/login.py — 페이지0: 로그인. ID/PW + 사용자 유형이 계정의 실제 role과 일치해야 인증됩니다."""
+import base64
+from pathlib import Path
+
 import streamlit as st
 
 from config import USERS, USER_TYPE_OPTIONS, DEFAULT_LANDING_PAGE
+from ui.styles import LOGIN_BACKGROUND_CSS_TEMPLATE
+
+_BG_IMAGE_PATH = Path(__file__).resolve().parent.parent / "assets" / "heimdall_top.png"
+
+
+@st.cache_data(show_spinner=False)
+def _bg_image_base64() -> str:
+    """배경 이미지를 base64로 인코딩합니다(캐시되어 재렌더링마다 다시 읽지 않음)."""
+    return base64.b64encode(_BG_IMAGE_PATH.read_bytes()).decode()
+
+
+def _inject_background_css() -> None:
+    """HEIMDALL 배경 이미지 + 로그인 패널 스타일을 주입합니다."""
+    st.markdown(
+        LOGIN_BACKGROUND_CSS_TEMPLATE.format(bg_b64=_bg_image_base64()),
+        unsafe_allow_html=True,
+    )
 
 
 def render() -> None:
     """로그인 화면 전체를 렌더링합니다."""
-    _, center, _ = st.columns([1, 1.1, 1])
-    with center:
-        st.markdown(
-            "<div style='text-align:center; font-size:1.6rem; font-weight:700; "
-            "margin:4rem 0 2rem;'>GOP 통합 감시 시스템</div>",
-            unsafe_allow_html=True,
-        )
+    _inject_background_css()
 
+    with st.container(key="login_panel"):
         username = st.text_input("ID", key="_login_id_widget")
         type_label = st.selectbox("사용자 유형", options=list(USER_TYPE_OPTIONS.keys()), key="_login_type_widget")
         password = st.text_input("PW", type="password", key="_login_pw_widget")

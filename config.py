@@ -21,7 +21,7 @@ CLIP_POST_SECONDS = 3.0
 CLIP_STORAGE_MAX_WIDTH = 480
 
 # 카메라 1대당 동시 대기 클립 개수 상한(메모리 보호)
-MAX_PENDING_CLIPS_PER_CAMERA = 1
+MAX_PENDING_CLIPS_PER_CAMERA = 2
 
 # 데모/백엔드 실패 시 conf/nms 임계값 폴백
 FALLBACK_CONF_THRESH = 0.7

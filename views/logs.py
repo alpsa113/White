@@ -2,11 +2,14 @@
 import streamlit as st
 
 from ui.log_tabs import render_view_tab, render_manage_tab
+from ui.styles import PAGE_PADDING_CSS
 
 
 def render() -> None:
     """감지 기록 페이지 전체를 렌더링합니다."""
     ss = st.session_state
+
+    st.markdown(PAGE_PADDING_CSS, unsafe_allow_html=True)
 
     if not ss.detection_logs:
         st.info("현재 기록된 탐지 데이터가 없습니다.")
