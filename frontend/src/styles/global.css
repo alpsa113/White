@@ -1,0 +1,857 @@
+@import "./theme.css";
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: var(--font-sans);
+  color: var(--color-text);
+  background: radial-gradient(ellipse 60% 40% at 15% 0%, rgba(34, 211, 238, 0.07), transparent 60%),
+    radial-gradient(ellipse 50% 50% at 100% 100%, rgba(34, 211, 238, 0.05), transparent 60%), var(--color-bg);
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+  color: inherit;
+  background: none;
+  border: none;
+}
+
+input,
+select,
+textarea {
+  font-family: inherit;
+}
+
+/* <select> 드롭다운 목록은 OS 네이티브 팝업이라 우리 페이지의 반투명 다크 배경이 그대로
+   적용되지 않고 흰 배경으로 뜨는 경우가 많은데, 텍스트 색은 다크 테마용 밝은 색을 그대로
+   물려받아 대비가 거의 없어 글씨가 잘 안 보였습니다. 옵션 목록에 명시적으로 밝은 배경 +
+   어두운 글자색을 지정해 항상 읽히도록 합니다. */
+select option {
+  background-color: #f8fafc;
+  color: #0f172a;
+}
+
+a {
+  color: var(--color-accent);
+}
+
+.app-shell {
+  display: flex;
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* ── 버튼 공용 ─────────────────────────────────────────────────────────── */
+.btn {
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-panel-border);
+  background: rgba(255, 255, 255, 0.02);
+  color: #cbd5e1;
+  padding: 0.4rem 0.8rem;
+  font-weight: 500;
+  font-size: 0.85rem;
+  white-space: nowrap;
+  transition: border-color 0.15s, color 0.15s;
+}
+.btn:hover:not(:disabled) {
+  border-color: rgba(34, 211, 238, 0.55);
+  color: #fff;
+}
+.btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.btn-primary {
+  background: rgba(34, 211, 238, 0.12);
+  border: 1px solid rgba(34, 211, 238, 0.65);
+  color: #67e8f9;
+  box-shadow: inset 3px 0 0 var(--color-accent);
+}
+.btn-block {
+  width: 100%;
+  display: block;
+}
+.btn-sm {
+  padding: 0.2rem 0.5rem;
+  font-size: 0.75rem;
+}
+.btn-icon {
+  padding: 0.3rem 0.5rem;
+  line-height: 1;
+}
+.btn-danger {
+  border-color: rgba(248, 81, 73, 0.5);
+  color: #f85149;
+}
+
+/* ── 로그인 페이지 (views/login.py) ───────────────────────────────────── */
+.login-page {
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden;
+  position: relative;
+  background-color: #030303;
+  background-image: url("/assets/heimdall_top.png");
+  background-size: 100% auto;
+  background-repeat: no-repeat;
+  background-position: top center;
+}
+.login-panel {
+  position: fixed;
+  top: 40vh;
+  left: 50%;
+  transform: translate(-50%, 0);
+  width: min(92vw, 30rem);
+  max-height: 54vh;
+  overflow-y: auto;
+  background: rgba(10, 10, 10, 0.55);
+  border: 1px solid rgba(201, 162, 39, 0.45);
+  border-radius: var(--radius-lg);
+  padding: clamp(1.2rem, 2.5vh, 2.5rem) clamp(1.2rem, 3vw, 2.5rem) 1.5rem;
+  backdrop-filter: blur(6px);
+  box-shadow: 0 0 30px rgba(0, 0, 0, 0.4);
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+.login-panel label {
+  color: #e8e2d0;
+  font-size: 0.85rem;
+  display: block;
+  margin-bottom: 0.3rem;
+}
+.login-panel input,
+.login-panel select {
+  width: 100%;
+  padding: 0.55rem 0.7rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(201, 162, 39, 0.35);
+  background: rgba(0, 0, 0, 0.35);
+  color: #f1ede0;
+}
+.login-panel .login-error {
+  color: var(--color-danger);
+  font-size: 0.85rem;
+}
+.login-panel .login-title {
+  color: #f1ede0;
+  font-size: 1.1rem;
+  font-weight: 700;
+  margin: 0 0 0.4rem;
+  letter-spacing: 0.04em;
+}
+
+/* ── 사이드바 (ui/layout.py) ──────────────────────────────────────────── */
+.sidebar {
+  width: 15rem;
+  flex: 0 0 auto;
+  background-color: #05070a;
+  background-image: url("/assets/sidebar_scene.png");
+  background-repeat: no-repeat;
+  background-position: bottom center;
+  background-size: 100% auto;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 1rem 0.9rem;
+  border-right: 1px solid rgba(148, 163, 184, 0.1);
+}
+.sidebar-logo img {
+  display: block;
+  width: 100%;
+  margin-bottom: 1rem;
+}
+.sidebar-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.sidebar-nav .btn {
+  justify-content: flex-start;
+  text-align: left;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.sidebar-warning {
+  color: var(--color-danger);
+  font-size: 0.8rem;
+  margin-top: 0.8rem;
+}
+.sidebar-footer {
+  margin-top: auto;
+  padding-top: 1.5rem;
+}
+.sidebar-account {
+  color: var(--color-text-dim);
+  font-size: 0.8rem;
+  margin: 0.4rem 0 0.8rem 0.2rem;
+}
+
+/* ── 메인 콘텐츠 영역 ──────────────────────────────────────────────────── */
+.main-content {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 100vh;
+  overflow-y: auto;
+  padding: 0.5rem 1rem 1rem;
+}
+.main-content.no-scroll {
+  overflow: hidden;
+}
+
+/* ── 대시보드 헤더 시계 ────────────────────────────────────────────────── */
+.header-clock {
+  text-align: left;
+  line-height: 1.5;
+  margin-bottom: 0.5rem;
+}
+.header-clock .clock-date {
+  font-size: 0.85rem;
+  color: gray;
+}
+.header-clock .clock-period {
+  font-size: 1.2rem;
+  font-weight: 500;
+}
+.header-clock .clock-time {
+  font-size: 1.6rem;
+  font-weight: 600;
+}
+
+/* ── 대시보드 레이아웃 ─────────────────────────────────────────────────── */
+.dashboard-body {
+  display: flex;
+  gap: 1rem;
+  height: calc(100vh - 4.5rem);
+  min-height: 0;
+}
+.dashboard-main {
+  flex: 4 1 0;
+  min-width: 0;
+  overflow-y: auto;
+}
+.dashboard-panel {
+  flex: 1.1 1 0;
+  min-width: 16rem;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  gap: 0.5rem;
+}
+
+/* ── 카메라 그리드/카드 ────────────────────────────────────────────────── */
+.camera-grid {
+  display: grid;
+  gap: 0.6rem;
+  grid-template-columns: repeat(var(--grid-cols, 2), minmax(0, 1fr));
+}
+.camera-card {
+  container-type: inline-size;
+  border: 1px solid var(--color-panel-border);
+  border-radius: var(--radius-md);
+  padding: 0.35rem;
+  background: rgba(255, 255, 255, 0.02);
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+.camera-card.spotlight {
+  height: 100%;
+}
+.camera-topbar {
+  width: 100%;
+  padding: 0.3cqw 0.6rem;
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
+.camera-title {
+  flex: 1 1 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 700;
+  font-size: clamp(0.7rem, 3cqw, 0.95rem);
+  background: none;
+  border: none;
+  color: var(--color-text);
+  text-align: left;
+  padding: 0;
+}
+button.camera-title {
+  cursor: pointer;
+}
+.camera-controls {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: clamp(3px, 1.2cqw, 8px);
+}
+.channel-toggle,
+.view-toggle {
+  display: flex;
+  gap: clamp(2px, 1cqw, 6px);
+}
+.channel-toggle .btn,
+.view-toggle .btn,
+.camera-controls .btn {
+  padding: clamp(1px, 0.8cqw, 5px) clamp(4px, 2cqw, 10px);
+  font-size: clamp(0.55rem, 3cqw, 0.85rem);
+  min-height: 0;
+}
+.camera-img-wrap {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--radius-sm);
+  background: #111827;
+  aspect-ratio: 16 / 9;
+}
+.camera-img-wrap img,
+.camera-img-wrap .camera-placeholder,
+.camera-img-wrap .video-overlay-wrap {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+.camera-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-dim);
+  font-size: 0.8rem;
+  background: #111827;
+}
+.camera-analysis-loading {
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.camera-analysis-error {
+  color: var(--color-danger);
+  text-align: center;
+  padding: 0 0.6rem;
+}
+.camera-analysis-progress-track {
+  width: 60%;
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.12);
+  overflow: hidden;
+}
+.camera-analysis-progress-fill {
+  height: 100%;
+  background: var(--color-primary, #58a6ff);
+  transition: width 0.3s ease;
+}
+.video-overlay-wrap {
+  position: relative;
+}
+.video-overlay-wrap video,
+.video-overlay-wrap canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.video-overlay-wrap canvas {
+  pointer-events: none;
+}
+.camera-caption {
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+  margin-top: 0.2rem;
+}
+
+/* ── 동물 탐지 토스트(우상단, Streamlit st.toast 이식) ──────────────────── */
+.animal-toast-stack {
+  position: fixed;
+  top: 1rem;
+  right: 1rem;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  pointer-events: none;
+}
+.animal-toast {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-width: 220px;
+  padding: 0.6rem 0.9rem;
+  background: var(--color-bg-alt);
+  border: 1px solid var(--color-panel-border);
+  border-radius: var(--radius-md);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+  animation: animal-toast-in 0.2s ease-out;
+}
+@keyframes animal-toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.animal-toast-icon {
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+}
+.animal-toast-title {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--color-text);
+}
+.animal-toast-camera {
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+}
+
+/* ── 미니맵 / 마커 (ui/outposts) ──────────────────────────────────────── */
+@keyframes outpost-marker-blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.15;
+  }
+}
+.map-wrap {
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+  border-radius: var(--radius-sm);
+  container-type: inline-size;
+}
+.map-wrap img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+.map-marker {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  z-index: 10;
+  width: clamp(16px, 7cqw, 24px);
+  height: clamp(16px, 7cqw, 24px);
+  border-radius: 50%;
+  border: clamp(1px, 0.6cqw, 2px) solid white;
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: clamp(7px, 3.4cqw, 13px);
+  font-weight: 700;
+  padding: 0;
+  line-height: 1;
+}
+.map-marker.blinking {
+  animation: outpost-marker-blink 1s infinite;
+}
+.map-stop-icon {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  z-index: 11;
+  width: clamp(8px, 4.2cqw, 15px);
+  height: clamp(8px, 4.2cqw, 15px);
+  border-radius: 50%;
+  background: #21262d;
+  color: white;
+  border: 1px solid white;
+  font-size: clamp(5px, 2.5cqw, 10px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  line-height: 1;
+}
+.map-check-badge {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  z-index: 12;
+  width: clamp(16px, 8.5cqw, 28px);
+  height: clamp(16px, 8.5cqw, 28px);
+  pointer-events: none;
+}
+.map-editor-marker {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  z-index: 10;
+  width: clamp(16px, 6cqw, 26px);
+  height: clamp(16px, 6cqw, 26px);
+  border-radius: 50%;
+  background: var(--marker-default);
+  border: 2px solid white;
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: clamp(8px, 3cqw, 12px);
+  font-weight: 700;
+}
+
+/* ── 탐지 이력 패널 ────────────────────────────────────────────────────── */
+.detection-panel {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.detection-panel-title {
+  font-weight: 700;
+  margin-bottom: 0.4rem;
+}
+.detection-panel-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+.detection-card {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.55rem 0.75rem;
+  margin-bottom: 0.5rem;
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.04);
+  width: 100%;
+  text-align: left;
+}
+.detection-card:hover {
+  border-color: var(--color-accent);
+}
+
+/* ── 탐지 상세 모달(탐지 이력 패널 항목 클릭 시) ────────────────────────── */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+  padding: 1rem;
+}
+.modal-panel {
+  background: var(--color-bg-alt);
+  border: 1px solid var(--color-panel-border);
+  border-radius: var(--radius-lg);
+  padding: 1rem;
+  width: 100%;
+  max-width: 32rem;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.3rem;
+}
+.detection-card.person {
+  border: 3px solid var(--class-person);
+  background: rgba(248, 81, 73, 0.1);
+}
+.detection-card .det-icon {
+  width: 34px;
+  height: 34px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+.detection-card .det-body {
+  flex: 1;
+  min-width: 0;
+}
+.detection-card .det-row1 {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+.detection-card .det-class {
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+.detection-card .det-cam {
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.detection-card .det-meta {
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
+/* ── 페이지 공통 ───────────────────────────────────────────────────────── */
+.page {
+  padding-top: 0.5rem;
+}
+.page h2,
+.page h3 {
+  font-weight: 700;
+}
+.divider {
+  border: none;
+  border-top: 1px solid var(--color-panel-border);
+  margin: 1rem 0;
+}
+.info-banner,
+.success-banner,
+.warning-banner,
+.error-banner {
+  border-radius: var(--radius-sm);
+  padding: 0.6rem 0.9rem;
+  font-size: 0.85rem;
+  margin-bottom: 0.6rem;
+}
+.info-banner {
+  background: rgba(88, 166, 255, 0.1);
+  border: 1px solid rgba(88, 166, 255, 0.3);
+  color: #79c0ff;
+}
+.success-banner {
+  background: rgba(63, 185, 80, 0.1);
+  border: 1px solid rgba(63, 185, 80, 0.35);
+  color: #56d364;
+}
+.warning-banner {
+  background: rgba(227, 160, 8, 0.12);
+  border: 1px solid rgba(227, 160, 8, 0.4);
+  color: #e3a008;
+}
+.error-banner {
+  background: rgba(248, 81, 73, 0.12);
+  border: 1px solid rgba(248, 81, 73, 0.4);
+  color: #f85149;
+}
+
+/* ── 로그 페이지 ───────────────────────────────────────────────────────── */
+.log-tabs {
+  display: flex;
+  gap: 0.4rem;
+  border-bottom: 1px solid var(--color-panel-border);
+  margin-bottom: 0.8rem;
+}
+.log-tab-btn {
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--color-text-muted);
+  padding: 0.5rem 0.9rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+.log-tab-btn.active {
+  color: var(--color-accent);
+  border-bottom-color: var(--color-accent);
+}
+.log-view-body {
+  display: flex;
+  gap: 1rem;
+}
+.log-table-col {
+  flex: 6 1 0;
+  min-width: 0;
+  max-height: 75vh;
+  overflow: auto;
+}
+.log-table-col table.log-table thead th {
+  position: sticky;
+  top: 0;
+  background: var(--color-bg-alt);
+  z-index: 1;
+}
+.log-img-col {
+  flex: 4 1 0;
+  min-width: 0;
+}
+table.log-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+table.log-table th,
+table.log-table td {
+  padding: 0.45rem 0.6rem;
+  border-bottom: 1px solid var(--color-panel-border);
+  text-align: left;
+  white-space: nowrap;
+}
+table.log-table th {
+  color: var(--color-text-muted);
+  font-weight: 600;
+  cursor: pointer;
+  user-select: none;
+}
+table.log-table tbody tr {
+  cursor: pointer;
+}
+table.log-table tbody tr:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+table.log-table tbody tr.selected {
+  background: rgba(34, 211, 238, 0.08);
+}
+table.log-table td.person-cell,
+table.log-table .person-cell {
+  background: rgba(248, 81, 73, 0.18);
+  color: var(--color-danger);
+  font-weight: 700;
+}
+.log-filters {
+  display: flex;
+  gap: 0.6rem;
+  margin-bottom: 0.6rem;
+  flex-wrap: wrap;
+}
+.log-filters input,
+.log-filters select {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--color-panel-border);
+  color: var(--color-text);
+  border-radius: var(--radius-sm);
+  padding: 0.35rem 0.5rem;
+  font-size: 0.85rem;
+}
+/* 편집 탭 표: 행이 많아져도 저장 버튼이 화면 아래로 한없이 밀려나지 않도록, 일정 높이를
+   넘으면 표 안에서만 스크롤되게 합니다(저장 버튼은 항상 표 바로 아래 고정 위치에 보임). */
+.log-editor-table-wrap {
+  max-height: 55vh;
+  overflow: auto;
+  border: 1px solid var(--color-panel-border);
+  border-radius: var(--radius-sm);
+}
+.log-editor-table-wrap table.log-table thead th {
+  position: sticky;
+  top: 0;
+  background: var(--color-bg-alt);
+  z-index: 1;
+}
+.log-editor-table input,
+.log-editor-table select,
+.log-editor-table textarea {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--color-panel-border);
+  color: var(--color-text);
+  border-radius: var(--radius-sm);
+  padding: 0.3rem 0.4rem;
+  font-size: 0.8rem;
+  width: 100%;
+}
+.log-editor-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 0.6rem;
+}
+
+/* ── 설정 페이지 ───────────────────────────────────────────────────────── */
+.settings-body {
+  display: flex;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+}
+.settings-map-col {
+  flex: 3 1 20rem;
+  min-width: 18rem;
+}
+.settings-list-col {
+  flex: 2 1 16rem;
+  min-width: 16rem;
+}
+.outpost-row {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.4rem 0;
+  border-bottom: 1px solid var(--color-panel-border);
+}
+.outpost-row .op-name {
+  flex: 0 0 5rem;
+  font-weight: 700;
+}
+.outpost-row .op-info {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.outpost-row input[type="text"],
+.outpost-row textarea {
+  width: 100%;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--color-panel-border);
+  color: var(--color-text);
+  border-radius: var(--radius-sm);
+  padding: 0.35rem 0.5rem;
+  font-size: 0.85rem;
+}
+.video-popover {
+  position: relative;
+  display: inline-block;
+}
+.video-popover-panel {
+  position: absolute;
+  right: 0;
+  top: 100%;
+  margin-top: 0.3rem;
+  width: 18rem;
+  background: #0d1117;
+  border: 1px solid var(--color-panel-border);
+  border-radius: var(--radius-md);
+  padding: 0.8rem;
+  z-index: 30;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+}
+.video-popover-panel .vp-row {
+  margin-bottom: 0.6rem;
+}
+.video-popover-panel .vp-status {
+  font-size: 0.78rem;
+  color: var(--color-text-muted);
+  margin-bottom: 0.2rem;
+}
+.status-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.status-dot {
+  width: 0.6rem;
+  height: 0.6rem;
+  border-radius: 50%;
+  display: inline-block;
+}
+.status-dot.ok {
+  background: var(--color-success);
+}
+.status-dot.error {
+  background: var(--color-warning);
+}
