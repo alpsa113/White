@@ -1,32 +1,26 @@
-# 데이터 (용량 큼 — 깃에 올리지 않음)
-data/raw/*
-data/processed/*
-!data/**/.gitkeep
-
-# 학습된 모델 가중치
-models/*
-!models/.gitkeep
-*.pt
-*.pth
-*.ckpt
-
-# 파이썬
-__pycache__/
-*.py[cod]
-.ipynb_checkpoints/
-.venv/
-env/
-
-# 자격증명 / 인증키 (절대 커밋 금지)
-.env
-*.key
-secrets.*
-
-# 실험관리 / 로그
-wandb/
-mlruns/
-*.log
-
-# OS
 .DS_Store
 .Rhistory
+.vscode/
+.env
+__pycache__/
+*.py[cod]
+TRAINING_SMOKE_TEST.md
+frontend/.env
+frontend/node_modules/
+frontend/dist/
+uploads/
+videos/
+/data/*
+!/data/*.py
+!/data/external/
+!/data/external/*.py
+/checkpoints/
+/outputs/
+/weights/*.pt
+/weights/*.pth
+/weights/*.onnx
+/weights/*.engine
+*.pt
+*.pth
+*.onnx
+*.engine

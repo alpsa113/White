@@ -1,0 +1,83 @@
+seed: 42
+val_ratio: 0.2
+output_dir: data/mini_test/manifests
+
+phases:
+  phase1:
+    val_ratio: 0.2
+    sources:
+      - name: phase1_single
+        format: gop_class_yolo
+        root: data/mini_test/phase1_raw/single
+        classes: [0, 1, 2, 3]
+        include_modalities: [rgb, thermal]
+        modality_dirs:
+          rgb: rgb
+          thermal: tir
+        image_dir: img
+        label_dir: label
+        strict_label_match: true
+        cond_vec_by_modality:
+          rgb: [0.0, 0.5, 1.0]
+          thermal: [0.0, 0.3, 0.0]
+
+  phase2:
+    val_ratio: 0.2
+    sources:
+      - name: phase2_pair
+        format: gop_class_yolo_pair
+        root: data/mini_test/phase2_raw/pair
+        classes: [0, 1, 2, 3]
+        rgb_dir: rgb
+        thermal_dir: tir
+        image_dir: img
+        label_dir: label
+        label_source: rgb
+        strict_label_match: true
+        cond_vec: [0.0, 0.3, 0.0]
+        tags: [real_pair]
+
+  phase3:
+    val_ratio: 0.2
+    sources:
+      - name: gop_raw_single
+        format: gop_class_yolo
+        root: data/mini_test/gop_raw/single
+        classes: [0, 1, 2, 3]
+        include_modalities: [rgb, thermal]
+        modality_dirs:
+          rgb: rgb
+          thermal: tir
+        image_dir: img
+        label_dir: label
+        strict_label_match: true
+        cond_vec_by_modality:
+          rgb: [0.0, 0.5, 1.0]
+          thermal: [0.0, 0.3, 0.0]
+
+      - name: gop_raw_pair
+        enabled: false
+        format: gop_class_yolo_pair
+        root: data/mini_test/gop_raw/pair
+        classes: [0, 1, 2, 3]
+        rgb_dir: rgb
+        thermal_dir: tir
+        image_dir: img
+        label_dir: label
+        label_source: rgb
+        strict_label_match: true
+        cond_vec: [0.0, 0.3, 0.0]
+        tags: [real_pair]
+
+      - name: gop_empty_background
+        format: gop_empty_folder
+        root: data/mini_test/gop_raw/empty
+        include_modalities: [rgb, thermal]
+        modality_dirs:
+          rgb: rgb
+          thermal: tir
+        image_dir: .
+        cond_vec_by_modality:
+          rgb: [0.0, 0.5, 1.0]
+          thermal: [0.0, 0.3, 0.0]
+        tags: [empty_background]
