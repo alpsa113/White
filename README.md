@@ -33,6 +33,9 @@ data/
   samplers.py                    # 모달리티 단위 batch sampler
   external/                      # KAIST/LLVIP 원본 직접 로더 보관
 inference/                       # 이미지/영상 추론, 전처리/후처리, 시각화
+backend.py                       # React 대시보드용 FastAPI 서버
+frontend/                        # React + TypeScript 관제 대시보드
+routers/, services/              # 대시보드 REST API, 영상 분석, 알림/로그 처리
 model/                           # DualYOLO, 백본, 융합, FPN, 헤드
 tools/
   build_manifest_splits.py       # phase별 manifest 생성
@@ -365,6 +368,43 @@ python tools/predict_video.py \
 
 현재 테스트용 checkpoint는 confidence가 낮을 수 있습니다. bbox 시각화 동작만 확인하려면 임시로 `--conf 0.0001`처럼 낮은 값을 사용할 수 있지만, 실제 검증에서는 충분히 학습된 checkpoint 기준으로 threshold를 다시 잡아야 합니다.
 영상에서 `--track`을 켜면 프레임 간 bbox 흔들림과 짧은 미탐을 줄일 수 있습니다. 장면 전환 직후 오탐이 남으면 `--track-high-thresh`, `--track-min-hits`를 높여 보수적으로 조정합니다.
+
+## React 대시보드 실행
+
+React 대시보드는 `frontend/`에 있고, 백엔드는 `backend.py`를 실행합니다.
+대시보드 백엔드는 내부에서 `inference.DualYOLOPredictor`를 사용하므로 Ultralytics checkpoint가 아니라 phase 학습 결과 checkpoint가 필요합니다.
+
+백엔드:
+
+```bash
+MODEL_PATH=checkpoints/phase3/best.pt \
+MODEL_CFG_PATH=configs/model.yaml \
+CONF_THRESHOLD=0.45 \
+NMS_THRESHOLD=0.4 \
+uvicorn backend:app --reload --port 8000
+```
+
+프론트엔드:
+
+```bash
+cd frontend
+npm install
+cp .env.example .env
+npm run dev
+```
+
+기본 주소:
+
+```text
+Backend: http://127.0.0.1:8000
+Frontend: http://localhost:5173
+```
+
+S3/RDS 환경변수가 없으면 로컬 메모리/파일 기반으로 동작합니다. S3 저장을 쓰려면 `boto3`와 `S3_BUCKET`, `S3_REGION`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`를 함께 준비합니다.
+
+최신 대시보드는 브라우저에서 영상을 직접 업로드하지 않고, `config.py`의 `DEMO_VIDEOS`에 지정된
+로컬 영상 경로를 사용합니다. 설정 화면에서 지도에 마커를 추가하면 마커 순서대로 `DEMO_VIDEOS`
+항목이 자동 매핑되고, 백엔드가 해당 영상을 사전 분석해 overlay timeline을 생성합니다.
 
 ## Git 관리 정책
 

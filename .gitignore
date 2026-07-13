@@ -1,9 +1,15 @@
 .DS_Store
 .Rhistory
 .vscode/
+.env
 __pycache__/
 *.py[cod]
 TRAINING_SMOKE_TEST.md
+frontend/.env
+frontend/node_modules/
+frontend/dist/
+uploads/
+videos/
 /data/*
 !/data/*.py
 !/data/external/
