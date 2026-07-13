@@ -220,7 +220,7 @@ a {
 }
 .header-clock .clock-date {
   font-size: 0.85rem;
-  color: gray;
+  color: var(--color-text);
 }
 .header-clock .clock-period {
   font-size: 1.2rem;
