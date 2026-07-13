@@ -204,7 +204,8 @@
       "Bash(rm -rf colab .streamlit icons __pycache__)",
       "Bash(rm -f assets/heimdall.png assets/heimdall_background.png assets/heimdall_top.png assets/heimdall_ui_example.png assets/sidebar_logo.png assets/sidebar_scene.png)",
       "Skill(artifact-design)",
-      "Skill(artifact-design:*)"
+      "Skill(artifact-design:*)",
+      "Bash(python -c \"import ast; [ast.parse\\(open\\(f, encoding='utf-8'\\).read\\(\\)\\) for f in ['backend.py','services/outposts.py','routers/outposts.py']]\")"
     ],
     "additionalDirectories": [
       "c:\\Users\\hoony\\KDt_Hanhwa",

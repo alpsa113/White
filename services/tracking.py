@@ -150,10 +150,21 @@ def process_frame(cam: dict, image: Image.Image, source: str, cam_state: dict, t
 
     tracks = cam_state.setdefault("person_tracks", {})
 
+    now = time.time()
+    last_toasts = cam_state.setdefault("last_toasts", {})
+    toasted_classes = set()
+
     if persons:
         annotated = draw_boxes(image, dets)
         matches = _match_detections_to_tracks(persons, tracks)
         matched_keys = set(matches.values())
+
+        for person in persons:
+            cls_name = person["class_name"]
+            if now - last_toasts.get(cls_name, 0) > ANIMAL_TOAST_COOLDOWN and cls_name not in toasted_classes:
+                new_toasts.append(cls_name)
+                last_toasts[cls_name] = now
+                toasted_classes.add(cls_name)
 
         for i, person in enumerate(persons):
             pconf = person["confidence"]
@@ -196,9 +207,6 @@ def process_frame(cam: dict, image: Image.Image, source: str, cam_state: dict, t
                 del tracks[key]
 
     # 동물 탐지: 경보 패널 없이 토스트 + 로그만 기록
-    now = time.time()
-    last_toasts = cam_state.setdefault("last_toasts", {})
-    toasted_classes = set()
     animals_list = [d for d in dets if not is_person(d["class_name"])]
 
     animal_tracks = cam_state.setdefault("animal_tracks", {})

@@ -413,9 +413,9 @@ button.camera-title {
   }
 }
 .animal-toast-icon {
-  width: 28px;
-  height: 28px;
-  object-fit: contain;
+  font-size: 1.5rem;
+  line-height: 1;
+  flex-shrink: 0;
 }
 .animal-toast-title {
   font-size: 0.85rem;
@@ -812,31 +812,6 @@ table.log-table .person-cell {
   border-radius: var(--radius-sm);
   padding: 0.35rem 0.5rem;
   font-size: 0.85rem;
-}
-.video-popover {
-  position: relative;
-  display: inline-block;
-}
-.video-popover-panel {
-  position: absolute;
-  right: 0;
-  top: 100%;
-  margin-top: 0.3rem;
-  width: 18rem;
-  background: #0d1117;
-  border: 1px solid var(--color-panel-border);
-  border-radius: var(--radius-md);
-  padding: 0.8rem;
-  z-index: 30;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
-}
-.video-popover-panel .vp-row {
-  margin-bottom: 0.6rem;
-}
-.video-popover-panel .vp-status {
-  font-size: 0.78rem;
-  color: var(--color-text-muted);
-  margin-bottom: 0.2rem;
 }
 .status-indicator {
   display: inline-flex;

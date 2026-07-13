@@ -33,4 +33,5 @@ sqlalchemy
 pymysql
 boto3
 
+# ── 환경변수 로드 ──
 dotenv

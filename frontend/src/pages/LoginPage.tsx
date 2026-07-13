@@ -37,8 +37,6 @@ export default function LoginPage() {
   return (
     <div className="login-page">
       <form className="login-panel" onSubmit={handleSubmit}>
-        <div className="login-title">HEIMDALL 관제 콘솔</div>
-
         <div>
           <label htmlFor="login-id">ID</label>
           <input

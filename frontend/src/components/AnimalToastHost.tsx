@@ -5,10 +5,11 @@ import { useEffect, useState } from "react";
 import { useRecentToasts } from "../api/hooks";
 import type { ToastEvent } from "../types";
 
-const CLASS_ICON_FILES: Record<string, string> = {
-  멧돼지: "boar.png",
-  고라니: "deer.png",
-  소형동물: "small_object.png",
+const CLASS_ICONS: Record<string, string> = {
+  사람: "🚶",
+  멧돼지: "🐗",
+  고라니: "🦌",
+  소형동물: "🐾",
 };
 
 const TOAST_VISIBLE_MS = 3500;
@@ -44,12 +45,10 @@ export function AnimalToastHost() {
   return (
     <div className="animal-toast-stack">
       {visible.map((t) => {
-        const iconFile = CLASS_ICON_FILES[t.class_name];
+        const icon = CLASS_ICONS[t.class_name];
         return (
           <div key={t.id} className="animal-toast">
-            {iconFile ? (
-              <img className="animal-toast-icon" src={`/icons/${iconFile}`} alt={t.class_name} />
-            ) : null}
+            {icon ? <span className="animal-toast-icon">{icon}</span> : null}
             <div>
               <div className="animal-toast-title">{t.class_name} 탐지</div>
               <div className="animal-toast-camera">{t.camera}</div>

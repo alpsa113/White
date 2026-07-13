@@ -1,19 +1,9 @@
 """services/outposts.py — 초소(지도 마커) 관리 및 카메라 목록 변환. FastAPI 상태(state_store) 기반."""
 import os
-import uuid
 
 import state_store as store
 from config import PRESET_MAP_IMAGE_PATH, DEMO_VIDEOS
 from services import video_analyzer
-
-UPLOAD_DIR = os.path.join(os.path.dirname(__file__), "..", "uploads", "outpost_videos")
-os.makedirs(UPLOAD_DIR, exist_ok=True)
-
-
-def clear_uploads() -> None:
-    """업로드 디렉터리를 비웁니다(초소 목록은 인메모리라 재시작 시 어차피 참조가 끊기므로)."""
-    for name in os.listdir(UPLOAD_DIR):
-        _remove_file(os.path.join(UPLOAD_DIR, name))
 
 
 def get_outposts() -> list[dict]:
@@ -98,29 +88,6 @@ def _remove_file(path: str | None) -> None:
             os.remove(path)
         except Exception:
             pass
-
-
-def set_marker_video(marker_id: str, channel: str, data: bytes, filename: str) -> dict | None:
-    """초소에 CCTV 영상을 채널별(EO/TIR)로 업로드해 매핑합니다. 기존 경로가 seed 파일이면
-    지우지 않고, 이후로는 일반 업로드 파일로 취급합니다."""
-    assert channel in ("eo", "tir"), f"알 수 없는 채널: {channel}"
-
-    ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else "mp4"
-    new_path = os.path.join(UPLOAD_DIR, f"{marker_id}_{channel}_{uuid.uuid4().hex[:8]}.{ext}")
-    with open(new_path, "wb") as f:
-        f.write(data)
-
-    for o in store.outposts:
-        if o["id"] == marker_id:
-            video_analyzer.stop_analysis(marker_id, channel)
-            if not o.get(f"video_{channel}_seeded"):
-                _remove_file(o.get(f"video_{channel}_path"))
-            o[f"video_{channel}_path"] = new_path
-            o[f"video_{channel}_name"] = filename
-            o[f"video_{channel}_seeded"] = False
-            return o
-    _remove_file(new_path)
-    return None
 
 
 def get_marker_video(marker_id: str, channel: str) -> tuple[str, str] | None:

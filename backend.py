@@ -22,7 +22,6 @@ import db_rds as db
 import s3_storage as s3
 import state_store as store
 from services import model_runtime
-from services import outposts as outpost_service
 from services import video_analyzer
 from services.audio_alert import beep_wav_bytes
 from routers import auth, outposts, cameras, tracking, settings, logs
@@ -80,12 +79,11 @@ def _load_initial_logs() -> None:
 
 @app.on_event("startup")
 def startup():
-    """서버 구동 시 모델을 1회 로드하고 DB/S3 연결·과거 로그를 준비하고 업로드 캐시를 정리합니다."""
+    """서버 구동 시 모델을 1회 로드하고 DB/S3 연결·과거 로그를 준비합니다."""
     model_runtime.load_model()
     store.status["db_enabled"] = db.init_db()
     store.status["s3_enabled"] = s3.is_enabled()
     _load_initial_logs()
-    outpost_service.clear_uploads()
 
 
 @app.on_event("shutdown")

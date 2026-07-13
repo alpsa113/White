@@ -34,15 +34,6 @@ export function useDeleteOutpost() {
   });
 }
 
-export function useUploadOutpostVideo() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: ({ id, channel, file }: { id: string; channel: Channel; file: File }) =>
-      api.uploadOutpostVideo(id, channel, file),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["outposts"] }),
-  });
-}
-
 // ── Cameras ──────────────────────────────────────────────────────────────
 export function useCameras() {
   return useQuery({ queryKey: ["cameras"], queryFn: api.getCameras });

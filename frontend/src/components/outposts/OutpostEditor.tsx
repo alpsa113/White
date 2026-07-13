@@ -1,61 +1,10 @@
-// components/outposts/OutpostEditor.tsx — 설정 페이지: 초소 위치 지도(클릭 마킹) + 정보/영상 매핑 편집기.
-// ui/outposts/editor.py 이식. admin은 편집(클릭 추가/정보 수정/영상 업로드/삭제), user는 조회만.
-import { useState, type MouseEvent } from "react";
+// components/outposts/OutpostEditor.tsx — 설정 페이지: 초소 위치 지도(클릭 마킹) + 정보 편집기.
+// ui/outposts/editor.py 이식. admin은 편집(클릭 추가/정보 수정/삭제), user는 조회만.
+// 영상은 로컬 경로로 지정되므로 업로드 UI는 없습니다.
+import { type MouseEvent } from "react";
 import { outpostMapImageUrl } from "../../api/client";
-import {
-  useCreateOutpost,
-  useDeleteOutpost,
-  useOutposts,
-  useUpdateOutpost,
-  useUploadOutpostVideo,
-} from "../../api/hooks";
+import { useCreateOutpost, useDeleteOutpost, useOutposts, useUpdateOutpost } from "../../api/hooks";
 import { useAuth } from "../../context/AuthContext";
-import type { Channel, Outpost } from "../../types";
-
-function VideoPopover({ outpost, index }: { outpost: Outpost; index: number }) {
-  const [open, setOpen] = useState(false);
-  const uploadMutation = useUploadOutpostVideo();
-
-  const handleFile = (channel: Channel, file: File | undefined) => {
-    if (!file) return;
-    uploadMutation.mutate({ id: outpost.id, channel, file });
-  };
-
-  return (
-    <div className="video-popover">
-      <button className="btn btn-sm btn-icon" onClick={() => setOpen((v) => !v)} title="영상 매핑">
-        🎬
-      </button>
-      {open && (
-        <div className="video-popover-panel">
-          <div className="vp-row">
-            <div className="vp-status">
-              EO(가시광): {outpost.video_eo_name ? `✅ ${outpost.video_eo_name}` : "⚠️ 매핑된 영상 없음"}
-            </div>
-            <input
-              type="file"
-              accept="video/mp4,video/quicktime,video/x-msvideo,video/x-matroska"
-              onChange={(e) => handleFile("eo", e.target.files?.[0])}
-            />
-          </div>
-          <div className="vp-row">
-            <div className="vp-status">
-              TIR(열화상): {outpost.video_tir_name ? `✅ ${outpost.video_tir_name}` : "⚠️ 매핑된 영상 없음"}
-            </div>
-            <input
-              type="file"
-              accept="video/mp4,video/quicktime,video/x-msvideo,video/x-matroska"
-              onChange={(e) => handleFile("tir", e.target.files?.[0])}
-            />
-          </div>
-          <button className="btn btn-sm btn-block" onClick={() => setOpen(false)}>
-            닫기
-          </button>
-        </div>
-      )}
-    </div>
-  );
-}
 
 export function OutpostEditor() {
   const { isAdmin } = useAuth();
@@ -100,7 +49,7 @@ export function OutpostEditor() {
         </div>
 
         <div className="settings-list-col">
-          <strong>{isAdmin ? "초소 정보 · 영상 매핑" : "초소 정보"}</strong>
+          <strong>초소 정보</strong>
           {outposts.length === 0 ? (
             <p className="camera-caption">
               등록된 초소가 없습니다{isAdmin ? " — 왼쪽 지도를 클릭해 추가하세요." : "."}
@@ -123,16 +72,13 @@ export function OutpostEditor() {
                   />
                 </div>
                 {isAdmin && (
-                  <>
-                    <VideoPopover outpost={o} index={i} />
-                    <button
-                      className="btn btn-sm btn-icon btn-danger"
-                      title={`CCTV${i + 1} — 마커 삭제`}
-                      onClick={() => deleteMutation.mutate(o.id)}
-                    >
-                      🗑
-                    </button>
-                  </>
+                  <button
+                    className="btn btn-sm btn-icon btn-danger"
+                    title={`CCTV${i + 1} — 마커 삭제`}
+                    onClick={() => deleteMutation.mutate(o.id)}
+                  >
+                    🗑
+                  </button>
                 )}
               </div>
             ))

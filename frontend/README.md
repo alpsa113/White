@@ -42,7 +42,7 @@ public/
 
 - 인증은 토큰 없이 `POST /api/auth/login` 성공 응답(`{username, role}`)을 그대로
   `localStorage`에 저장하는 방식입니다(기존 Streamlit 세션과 동일한 무인증 설계).
-- `admin` 역할만 로그 편집 탭, 데모 모드 토글, 초소 지도 편집(마커 추가/삭제/영상 업로드)을 사용할 수
+- `admin` 역할만 로그 편집 탭, 데모 모드 토글, 초소 지도 편집(마커 추가/삭제)을 사용할 수
   있습니다. `user` 역할은 조회 전용 화면을 봅니다.
 - MJPEG 스트림(`/api/stream/{camera_id}`)은 react-query를 쓰지 않고 `<img src=...>`에 직접
   연결합니다 — 브라우저의 multipart/x-mixed-replace 처리가 프레임 갱신을 담당합니다.

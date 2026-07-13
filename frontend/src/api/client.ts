@@ -74,24 +74,6 @@ export function deleteOutpost(id: string): Promise<void> {
   return request<void>(`/api/outposts/${id}`, { method: "DELETE" });
 }
 
-// TODO(backend contract): exact multipart field name for the uploaded file is
-// unconfirmed — using "file" as the simplest reasonable choice. Adjust if the
-// real backend expects a different field name (e.g. "video").
-export async function uploadOutpostVideo(
-  id: string,
-  channel: Channel,
-  file: File
-): Promise<{ video_eo_name?: string; video_tir_name?: string }> {
-  const form = new FormData();
-  form.append("file", file);
-  const res = await fetch(`${API_BASE_URL}/api/outposts/${id}/video/${channel}`, {
-    method: "POST",
-    body: form,
-  });
-  if (!res.ok) throw new ApiError(res.status, res.statusText);
-  return res.json();
-}
-
 export function outpostMapImageUrl(): string {
   return `${API_BASE_URL}/api/outposts/map-image`;
 }
