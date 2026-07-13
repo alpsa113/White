@@ -32,3 +32,5 @@ pillow
 sqlalchemy
 pymysql
 boto3
+
+dotenv
