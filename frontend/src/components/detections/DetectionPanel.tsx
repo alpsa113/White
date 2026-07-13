@@ -1,11 +1,11 @@
-// components/detections/DetectionPanel.tsx — 우측 탐지 이력 패널(최대 50개, 사람 클래스 강조).
+// components/detections/DetectionPanel.tsx — 우측 탐지 이력 패널(최대 50개, 초소별 탭 + 사람/동물 구분).
 // ui/camera/detection_panel.py 이식.
 // 웹페이지를 새로 열었을 때(최초 로딩) 시점의 최신 id를 기준선으로 삼아, 그 이후 새로 발생한
 // 탐지만 표시합니다(RDS에 쌓인 과거 이력은 '감지 기록' 페이지에서만 노출).
 // 항목을 클릭하면 '감지 기록' 조회 탭과 동일한 상세 정보 + 스냅샷/클립을 모달로 보여줍니다.
 import { useState } from "react";
-import { useRecentDetections } from "../../api/hooks";
-import { fmtDtDot, fmtPercent, isPersonClass } from "../../utils/formatters";
+import { useCameras, useRecentDetections } from "../../api/hooks";
+import { fmtDtDot, isPersonClass } from "../../utils/formatters";
 import { DetectionDetailModal } from "./DetectionDetailModal";
 import type { Detection } from "../../types";
 
@@ -20,9 +20,29 @@ const CLASS_ICON_FILES: Record<string, string> = {
 // 브라우저를 새로고침하거나 새 탭에서 열 때(모듈이 처음부터 다시 로드될 때)만 초기화됩니다.
 let baselineId: number | null = null;
 
+function DetectionCard({ d, onClick }: { d: Detection; onClick: () => void }) {
+  const person = isPersonClass(d.class_name);
+  const iconFile = CLASS_ICON_FILES[d.class_name];
+  return (
+    <button type="button" className="detection-card" onClick={onClick}>
+      {iconFile ? (
+        <img className={`det-icon${person ? " person" : ""}`} src={`/icons/${iconFile}`} alt={d.class_name} />
+      ) : (
+        <div className={`det-icon${person ? " person" : ""}`} />
+      )}
+      <div className="det-body">
+        <div className="det-cam">{d.camera}</div>
+        <div className="det-meta">{fmtDtDot(d)}</div>
+      </div>
+    </button>
+  );
+}
+
 export function DetectionPanel() {
+  const { data: cameras = [] } = useCameras();
   const { data: detections } = useRecentDetections(50);
   const [selected, setSelected] = useState<Detection | null>(null);
+  const [activeCameraId, setActiveCameraId] = useState<string | null>(null);
 
   if (baselineId === null && detections) {
     baselineId = detections.reduce((max, d) => Math.max(max, d.id), 0);
@@ -30,41 +50,50 @@ export function DetectionPanel() {
 
   const items = baselineId === null ? [] : (detections ?? []).filter((d) => d.id > (baselineId as number));
 
+  const activeCamera = cameras.find((c) => c.id === activeCameraId) ?? cameras[0];
+  const cameraItems = activeCamera ? items.filter((d) => d.camera === activeCamera.name) : [];
+  const personItems = cameraItems.filter((d) => isPersonClass(d.class_name));
+  const animalItems = cameraItems.filter((d) => !isPersonClass(d.class_name));
+
   return (
     <div className="detection-panel">
       <div className="detection-panel-title">탐지 이력</div>
-      <div className="detection-panel-list">
-        {items.length === 0 ? (
-          <div className="camera-caption">새로운 탐지 이력이 없습니다.</div>
-        ) : (
-          items.map((d) => {
-            const person = isPersonClass(d.class_name);
-            const iconFile = CLASS_ICON_FILES[d.class_name];
-            return (
-              <button
-                key={d.id}
-                type="button"
-                className={`detection-card${person ? " person" : ""}`}
-                onClick={() => setSelected(d)}
-              >
-                {iconFile ? (
-                  <img className="det-icon" src={`/icons/${iconFile}`} alt={d.class_name} />
-                ) : (
-                  <div className="det-icon" />
-                )}
-                <div className="det-body">
-                  <div className="det-row1">
-                    <div className="det-class">{d.class_name}</div>
-                    <div className="det-cam">{d.camera}</div>
-                  </div>
-                  <div className="det-meta">
-                    {fmtPercent(d.score)} · {fmtDtDot(d)}
-                  </div>
-                </div>
-              </button>
-            );
-          })
-        )}
+
+      {cameras.length > 0 && (
+        <div className="detection-panel-tabs">
+          {cameras.map((c, i) => (
+            <button
+              key={c.id}
+              type="button"
+              className={`detection-panel-tab${activeCamera?.id === c.id ? " active" : ""}`}
+              onClick={() => setActiveCameraId(c.id)}
+            >
+              초소{i + 1}
+            </button>
+          ))}
+        </div>
+      )}
+
+      <div className="detection-panel-section">
+        <div className="detection-panel-section-title">사람</div>
+        <div className="detection-panel-list">
+          {personItems.length === 0 ? (
+            <div className="camera-caption">새로운 탐지 이력이 없습니다.</div>
+          ) : (
+            personItems.map((d) => <DetectionCard key={d.id} d={d} onClick={() => setSelected(d)} />)
+          )}
+        </div>
+      </div>
+
+      <div className="detection-panel-section">
+        <div className="detection-panel-section-title">동물</div>
+        <div className="detection-panel-list">
+          {animalItems.length === 0 ? (
+            <div className="camera-caption">새로운 탐지 이력이 없습니다.</div>
+          ) : (
+            animalItems.map((d) => <DetectionCard key={d.id} d={d} onClick={() => setSelected(d)} />)
+          )}
+        </div>
       </div>
 
       {selected && <DetectionDetailModal detection={selected} onClose={() => setSelected(null)} />}

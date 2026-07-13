@@ -1,6 +1,6 @@
 // components/map/MiniMap.tsx — 관제 지도(초소 마커 + 사람 탐지 시 점멸). ui/outposts/viewer.py + marker_overlay.py 이식.
-// 점멸 여부는 더 이상 서버의 실시간 tracking 프로세스가 아니라, 각 카메라 카드(VideoWithOverlay)가
-// 자신의 <video> currentTime 기준으로 계산해 LiveDetectionContext에 보고한 값을 사용합니다.
+// 점멸은 사람 탐지 알림(토스트)이 오면 켜지고, 사용자가 × 버튼으로 끄기 전까지는 화면상 사람이
+// 사라져도 자동으로 꺼지지 않습니다(LiveDetectionContext의 personAlertActiveByCamera).
 import { outpostMapImageUrl } from "../../api/client";
 import { useLiveDetection } from "../../context/LiveDetectionContext";
 import type { Outpost } from "../../types";
@@ -13,19 +13,10 @@ interface MiniMapProps {
   selectedIds: Set<string>;
   visibleIds: Set<string>;
   onToggleSelect: (id: string) => void;
-  onStopBlink: (id: string) => void;
-  stoppedBlink: Set<string>;
 }
 
-export function MiniMap({
-  outposts,
-  selectedIds,
-  visibleIds,
-  onToggleSelect,
-  onStopBlink,
-  stoppedBlink,
-}: MiniMapProps) {
-  const { personActiveByCamera } = useLiveDetection();
+export function MiniMap({ outposts, selectedIds, visibleIds, onToggleSelect }: MiniMapProps) {
+  const { personAlertActiveByCamera, dismissCameraPersonLight } = useLiveDetection();
 
   if (outposts.length === 0) {
     return (
@@ -39,7 +30,7 @@ export function MiniMap({
     <div className="map-wrap">
       <img src={outpostMapImageUrl()} alt="초소 지도" />
       {outposts.map((o, i) => {
-        const isBlinking = Boolean(personActiveByCamera[o.id]) && !stoppedBlink.has(o.id);
+        const isBlinking = Boolean(personAlertActiveByCamera[o.id]);
         const selected = selectedIds.has(o.id);
         const checked = visibleIds.has(o.id);
         const color = isBlinking ? BLINK_COLOR : DEFAULT_COLOR;
@@ -88,10 +79,10 @@ export function MiniMap({
               <button
                 className="map-stop-icon"
                 style={{ left: `calc(${left} + 4.5cqw)`, top: `calc(${top} - 4.5cqw)` }}
-                title={`${o.info || o.id} — 점멸 정지`}
-                onClick={() => onStopBlink(o.id)}
+                title={`${o.info || o.id} — 점멸 끄기`}
+                onClick={() => dismissCameraPersonLight(o.id)}
               >
-                ⏹
+                ×
               </button>
             )}
           </div>

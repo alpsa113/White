@@ -24,7 +24,6 @@ function DashboardPageInner() {
 
   const [selectedCam, setSelectedCam] = useState<string>(ALL_ZONES);
   const [mapSelectedIds, setMapSelectedIds] = useState<Set<string>>(new Set());
-  const [stoppedBlink, setStoppedBlink] = useState<Set<string>>(new Set());
 
   const outpostsById = useMemo(() => {
     const map: Record<string, (typeof outposts)[number]> = {};
@@ -39,10 +38,6 @@ function DashboardPageInner() {
       else next.add(id);
       return next;
     });
-  };
-
-  const stopBlink = (id: string) => {
-    setStoppedBlink((prev) => new Set(prev).add(id));
   };
 
   const handleExpand = (cameraName: string) => {
@@ -102,8 +97,6 @@ function DashboardPageInner() {
               selectedIds={mapSelectedIds}
               visibleIds={visibleIds}
               onToggleSelect={toggleMapSelect}
-              onStopBlink={stopBlink}
-              stoppedBlink={stoppedBlink}
             />
           </div>
           <DetectionPanel />

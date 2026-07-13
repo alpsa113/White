@@ -25,3 +25,13 @@ export function fmtPercent(score: number): string {
 export function isPersonClass(className: string): boolean {
   return className === "사람";
 }
+
+/** epoch(초) 기준 경과 시간을 "N초 전"/"N분 전"/"N시간 전" 형태로 표시합니다. */
+export function fmtElapsed(ts: number): string {
+  const diffSec = Math.max(0, Math.floor(Date.now() / 1000 - ts));
+  if (diffSec < 60) return `${diffSec}초 전`;
+  const diffMin = Math.floor(diffSec / 60);
+  if (diffMin < 60) return `${diffMin}분 전`;
+  const diffHour = Math.floor(diffMin / 60);
+  return `${diffHour}시간 전`;
+}

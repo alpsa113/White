@@ -40,8 +40,10 @@ export function useCameras() {
 }
 
 export function useSetCameraChannel() {
+  const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ id, channel }: { id: string; channel: Channel }) => api.setCameraChannel(id, channel),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["outposts"] }),
   });
 }
 

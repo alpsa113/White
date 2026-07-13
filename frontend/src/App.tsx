@@ -1,4 +1,4 @@
-import { Navigate, Route, Routes } from "react-router-dom";
+import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { AnimalToastHost } from "./components/AnimalToastHost";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { Sidebar } from "./components/Sidebar";
@@ -20,10 +20,12 @@ function AppShell({ children }: { children: React.ReactNode }) {
 export default function App() {
   const { isAuthenticated, isAdmin } = useAuth();
   const homePath = isAdmin ? "/settings" : "/dashboard";
+  const location = useLocation();
+  const isLiveMonitoringPage = location.pathname === "/dashboard";
 
   return (
     <>
-      {isAuthenticated && <AnimalToastHost />}
+      {isAuthenticated && !isLiveMonitoringPage && <AnimalToastHost />}
       <Routes>
         <Route
           path="/login"

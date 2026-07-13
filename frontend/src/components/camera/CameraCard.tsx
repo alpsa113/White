@@ -7,7 +7,7 @@
 // 못해 혼동을 줄 수 있었습니다.
 import { useCallback, useEffect, useRef, useState, type MouseEvent, type WheelEvent } from "react";
 import { useSetCameraChannel } from "../../api/hooks";
-import { useLiveDetection } from "../../context/LiveDetectionContext";
+import { CameraAlertBox } from "./CameraAlertBox";
 import { VideoWithOverlay } from "./VideoWithOverlay";
 import type { Camera, Channel, Outpost } from "../../types";
 
@@ -34,11 +34,14 @@ export function CameraCard({
   // 돌아올 때마다(컴포넌트 재마운트) 항상 EO로 되돌아가는 문제가 있었습니다.
   const [channel, setChannelLocal] = useState<Channel>(() => outpost?.active_channel ?? "eo");
   // cameras 목록이 outposts보다 먼저 도착해 outpost가 undefined인 채로 마운트되는 경우를 대비해,
-  // active_channel이 뒤늦게 도착하면 최초 1회만 반영합니다(이후 사용자가 직접 전환한 값은 덮어쓰지 않음).
-  const channelSyncedRef = useRef(Boolean(outpost?.active_channel));
+  // active_channel이 뒤늦게 도착하면 반영합니다. 단, 사용자가 이번 마운트에서 직접 채널을
+  // 전환한 뒤에는(userSwitchedRef) 서버 재조회 타이밍에 따른 stale 값으로 덮어쓰지 않습니다.
+  // (active_channel은 백엔드가 항상 기본값 "eo"를 채워 내려주므로, "값이 존재하는지"가 아니라
+  // "사용자가 전환했는지"로 판단해야 합니다 — 그렇지 않으면 사용자가 전환한 채널이 페이지를
+  // 벗어났다 돌아올 때마다 항상 최초 마운트값(EO)으로 리셋되는 버그가 있었습니다.)
+  const userSwitchedRef = useRef(false);
   useEffect(() => {
-    if (channelSyncedRef.current || !outpost?.active_channel) return;
-    channelSyncedRef.current = true;
+    if (userSwitchedRef.current || !outpost?.active_channel) return;
     setChannelLocal(outpost.active_channel);
   }, [outpost?.active_channel]);
   const [zoom, setZoom] = useState({ scale: 1, panX: 0, panY: 0 });
@@ -47,7 +50,6 @@ export function CameraCard({
   const videoRef = useRef<HTMLVideoElement | null>(null);
 
   const setChannelMutation = useSetCameraChannel();
-  const { setCameraPersonActive } = useLiveDetection();
 
   const showFocusedControls = !isGrid || isFocused;
 
@@ -56,6 +58,7 @@ export function CameraCard({
 
   const handleChannelSwitch = (next: Channel) => {
     if (next === channel) return;
+    userSwitchedRef.current = true;
     setChannelLocal(next);
     setChannelMutation.mutate({ id: camera.id, channel: next });
   };
@@ -170,6 +173,7 @@ export function CameraCard({
         onMouseLeave={onMouseUp}
         style={{ cursor: showFocusedControls ? "grab" : "default" }}
       >
+        <CameraAlertBox cameraName={camera.name} />
         {channelAvailable ? (
           <VideoWithOverlay
             ref={videoRef}
@@ -179,7 +183,6 @@ export function CameraCard({
               transformOrigin: "0 0",
               transform: `translate(${zoom.panX}px, ${zoom.panY}px) scale(${zoom.scale})`,
             }}
-            onPersonActiveChange={(active) => setCameraPersonActive(camera.id, active)}
           />
         ) : (
           <div className="camera-placeholder">매핑된 영상 없음</div>

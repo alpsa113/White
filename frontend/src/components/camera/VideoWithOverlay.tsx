@@ -6,7 +6,6 @@
 import { forwardRef, useEffect, useMemo, useRef, useState, type CSSProperties, type MutableRefObject } from "react";
 import { videoUrl } from "../../api/client";
 import { useAnalysisStatus, useDetectionsTimeline } from "../../api/hooks";
-import { isPersonClass } from "../../utils/formatters";
 import type { Camera, Channel, TimelineDetection, TimelineEntry } from "../../types";
 
 const CLASS_COLORS: Record<string, string> = {
@@ -21,7 +20,6 @@ interface VideoWithOverlayProps {
   camera: Camera;
   channel: Channel;
   style?: CSSProperties;
-  onPersonActiveChange?: (active: boolean) => void;
 }
 
 /** 타임라인에서 tMs(ms)에 가장 가까운 항목을 찾습니다(정렬된 배열 이진 탐색). */
@@ -66,11 +64,10 @@ function drawDetections(canvas: HTMLCanvasElement, dets: TimelineDetection[]) {
 }
 
 export const VideoWithOverlay = forwardRef<HTMLVideoElement, VideoWithOverlayProps>(
-  function VideoWithOverlay({ camera, channel, style, onPersonActiveChange }, forwardedRef) {
+  function VideoWithOverlay({ camera, channel, style }, forwardedRef) {
     const videoRef = useRef<HTMLVideoElement | null>(null);
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
     const timelineRef = useRef<TimelineEntry[]>([]);
-    const wasPersonActiveRef = useRef(false);
     const rafRef = useRef<number | null>(null);
     const [videoSize, setVideoSize] = useState<{ w: number; h: number } | null>(null);
 
@@ -88,7 +85,7 @@ export const VideoWithOverlay = forwardRef<HTMLVideoElement, VideoWithOverlayPro
       else if (forwardedRef) (forwardedRef as MutableRefObject<HTMLVideoElement | null>).current = el;
     };
 
-    // 매 프레임: 캔버스 갱신 + 현재 탐지의 사람 여부를 상위로 보고.
+    // 매 프레임: 현재 탐지 결과로 캔버스(박스 오버레이) 갱신.
     useEffect(() => {
       if (!ready) return;
       const video = videoRef.current;
@@ -96,18 +93,13 @@ export const VideoWithOverlay = forwardRef<HTMLVideoElement, VideoWithOverlayPro
       if (!video || !canvas) return;
 
       const tick = () => {
-        const entry = findNearestEntry(timelineRef.current, video.currentTime * 1000);
+        const tMs = video.currentTime * 1000;
+        const entry = findNearestEntry(timelineRef.current, tMs);
         const dets = entry?.dets ?? [];
 
         if (canvas.width !== video.videoWidth && video.videoWidth > 0) canvas.width = video.videoWidth;
         if (canvas.height !== video.videoHeight && video.videoHeight > 0) canvas.height = video.videoHeight;
         if (canvas.width > 0 && canvas.height > 0) drawDetections(canvas, dets);
-
-        const personActive = dets.some((d) => isPersonClass(d.class_name));
-        if (personActive !== wasPersonActiveRef.current) {
-          wasPersonActiveRef.current = personActive;
-          onPersonActiveChange?.(personActive);
-        }
 
         rafRef.current = requestAnimationFrame(tick);
       };
