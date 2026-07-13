@@ -180,13 +180,29 @@ def _start_pacer(cam: dict, video_path: str, key: str, timeline: list[dict]) -> 
     threading.Thread(target=_run_pacer, args=(cam, video_path, key, timeline, stop_event), daemon=True).start()
 
 
+def _open_capture(video_path: str, retries: int = 5, delay: float = 0.5):
+    """cv2.VideoCapture를 엽니다. 같은 영상 파일을 여러 초소/채널 페이서가 동시에 여는
+    경우(데모 영상을 재사용하는 설정) 드물게 첫 open이 실패할 수 있어 재시도합니다."""
+    for _ in range(retries):
+        cap = cv2.VideoCapture(video_path)
+        if cap.isOpened():
+            return cap
+        cap.release()
+        time.sleep(delay)
+    return None
+
+
 def _run_pacer(cam: dict, video_path: str, key: str, timeline: list[dict], stop_event: threading.Event) -> None:
     """2단계: 캐시된 탐지 결과를 실제 재생 속도에 맞춰 흘려보내며 트래킹/알림만 수행합니다.
     <video loop>처럼 끝나면 처음부터 반복합니다."""
     if not timeline:
         return
-    cap = cv2.VideoCapture(video_path) if HAS_CV2 else None
+    cap = _open_capture(video_path) if HAS_CV2 else None
+    if HAS_CV2 and cap is None:
+        print(f"[video_analyzer] {key} 영상을 열지 못해 실시간 알림 기록을 시작하지 못했습니다: {video_path}")
+        return
     cam_state = {"person_tracks": {}, "animal_tracks": {}, "last_toasts": {}, "last_dets": []}
+    consecutive_grab_failures = 0
 
     while not stop_event.is_set():
         cycle_start_wall = time.time()
@@ -202,7 +218,17 @@ def _run_pacer(cam: dict, video_path: str, key: str, timeline: list[dict], stop_
 
             pil_img = _grab_frame(cap, entry["t"])
             if pil_img is None:
+                # 프레임을 못 읽는 상태가 이어지면(핸들이 끊긴 경우 등) 재시도 없이는
+                # 이 채널의 알림이 영원히 쌓이지 않으므로, 일정 횟수 실패 시 캡처를 재오픈합니다.
+                consecutive_grab_failures += 1
+                if consecutive_grab_failures >= 10:
+                    consecutive_grab_failures = 0
+                    cap.release()
+                    reopened = _open_capture(video_path)
+                    if reopened is not None:
+                        cap = reopened
                 continue
+            consecutive_grab_failures = 0
 
             try:
                 _dets, _is_new, _new_alert_ids, toasts, new_track_infos = process_frame(

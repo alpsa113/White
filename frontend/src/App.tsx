@@ -54,7 +54,7 @@ export default function App() {
         <Route
           path="/settings"
           element={
-            <ProtectedRoute adminOnly>
+            <ProtectedRoute>
               <AppShell>
                 <SettingsPage />
               </AppShell>

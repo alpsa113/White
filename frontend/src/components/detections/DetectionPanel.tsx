@@ -44,8 +44,15 @@ export function DetectionPanel() {
   const [selected, setSelected] = useState<Detection | null>(null);
   const [activeCameraId, setActiveCameraId] = useState<string | null>(null);
 
-  if (baselineId === null && detections) {
-    baselineId = detections.reduce((max, d) => Math.max(max, d.id), 0);
+  if (detections) {
+    const currentMaxId = detections.reduce((max, d) => Math.max(max, d.id), 0);
+    // 최초 로드 시 기준선을 세우고, 이후로는 그 기준선보다 큰(새로) 발생한 항목만 표시합니다.
+    // 서버가 재시작되어(인메모리 상태 초기화) id가 기존 기준선보다 낮아진 경우에는 기준선을
+    // 다시 낮춰 재동기화합니다 — 그렇지 않으면 새 탐지가 영원히 기준선을 넘지 못해 패널이
+    // 계속 빈 채로 남는 문제가 있었습니다.
+    if (baselineId === null || currentMaxId < baselineId) {
+      baselineId = currentMaxId;
+    }
   }
 
   const items = baselineId === null ? [] : (detections ?? []).filter((d) => d.id > (baselineId as number));

@@ -4,7 +4,7 @@ import { NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 
 export function Sidebar() {
-  const { user, isAdmin, logout } = useAuth();
+  const { user, logout } = useAuth();
   const navigate = useNavigate();
 
   const handleLogout = () => {
@@ -28,11 +28,9 @@ export function Sidebar() {
         <NavLink to="/logs" className={navClass}>
           감지 기록
         </NavLink>
-        {isAdmin && (
-          <NavLink to="/settings" className={navClass}>
-            설정
-          </NavLink>
-        )}
+        <NavLink to="/settings" className={navClass}>
+          설정
+        </NavLink>
       </nav>
 
       <div className="sidebar-footer">
