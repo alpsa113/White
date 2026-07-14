@@ -53,13 +53,13 @@ PRESET_MAP_IMAGE_PATH = os.path.join(os.path.dirname(__file__), "assets", "gop_p
 # 업로드 버튼 없이 로컬 영상 경로가 자동 배정됩니다(원본 파일을 복사하지 않고 경로만 참조).
 # 비워두면(기본값) 기존처럼 마커를 찍은 뒤 업로드해야 합니다. eo_path/tir_path는 한쪽만 있어도 됩니다.
 DEMO_VIDEOS: list[dict] = [
-    {"info": "1소초",
+    {"info": "초소1",
      "eo_path": r"videos//video4.mp4", "tir_path": r"videos//video1.mp4"},
-    {"info": "2소초",
+    {"info": "초소2",
      "eo_path": r"videos//video3.mp4", "tir_path": r"videos//video2.mp4"},
-    {"info": "3소초",
+    {"info": "초소3",
      "eo_path": r"videos//video1.mp4", "tir_path": r"videos//video3.mp4"},
-    {"info": "4소초",
+    {"info": "초소4",
      "eo_path": r"videos//video2.mp4", "tir_path": r"videos//video4.mp4"},
 ]
 
