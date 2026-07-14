@@ -297,7 +297,7 @@ class Trainer:
             num_classes=4,
             iou_thresh=0.5,
             iou_thresholds=[x / 100 for x in range(50, 100, 5)],
-            operating_conf=0.45,
+            operating_conf=0.50,
         )
         for batch in self.val_loader:
             batch = self._to_device(batch)

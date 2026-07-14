@@ -22,7 +22,7 @@ class DualYOLOPredictor:
         checkpoint_path: str | Path,
         model_cfg_path: str | Path = "configs/model.yaml",
         device: str | None = None,
-        conf_thresh: float = 0.45,
+        conf_thresh: float = 0.50,
         nms_thresh: float = 0.4,
         max_detections: int = 300,
     ):

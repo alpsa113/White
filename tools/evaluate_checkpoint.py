@@ -359,7 +359,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--num-workers", type=int, default=0)
     parser.add_argument("--img-size", type=int, default=None)
     parser.add_argument("--device", default=None)
-    parser.add_argument("--conf", type=float, default=0.45, help="운영 지표 기준 confidence")
+    parser.add_argument("--conf", type=float, default=0.50, help="운영 지표 기준 confidence")
     parser.add_argument("--min-conf", type=float, default=0.05, help="PR curve 후보 보존용 최소 confidence")
     parser.add_argument("--nms", type=float, default=0.4)
     parser.add_argument("--iou", type=float, default=0.5)

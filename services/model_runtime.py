@@ -15,7 +15,7 @@ from inference import DualYOLOPredictor
 MODEL_PATH = os.getenv("MODEL_PATH", "checkpoints/phase3/best.pt")
 MODEL_CFG_PATH = os.getenv("MODEL_CFG_PATH", "configs/model.yaml")
 DEVICE = os.getenv("DEVICE")
-CONF_THRESHOLD = float(os.getenv("CONF_THRESHOLD", "0.45"))
+CONF_THRESHOLD = float(os.getenv("CONF_THRESHOLD", "0.50"))
 NMS_THRESHOLD = float(os.getenv("NMS_THRESHOLD", "0.4"))
 
 DISPLAY_CLASS_NAMES = {

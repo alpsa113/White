@@ -379,7 +379,7 @@ React 대시보드는 `frontend/`에 있고, 백엔드는 `backend.py`를 실행
 ```bash
 MODEL_PATH=checkpoints/phase3/best.pt \
 MODEL_CFG_PATH=configs/model.yaml \
-CONF_THRESHOLD=0.45 \
+CONF_THRESHOLD=0.50 \
 NMS_THRESHOLD=0.4 \
 uvicorn backend:app --reload --port 8000
 ```

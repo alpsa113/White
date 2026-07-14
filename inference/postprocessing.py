@@ -26,7 +26,7 @@ def restore_boxes_to_original(
 def postprocess_output(
     model_out: dict,
     meta: LetterboxMeta,
-    conf_thresh: float = 0.45,
+    conf_thresh: float = 0.50,
     nms_thresh: float = 0.4,
     max_detections: int = 300,
     class_names: list[str] | None = None,
