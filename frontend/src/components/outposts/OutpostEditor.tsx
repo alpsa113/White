@@ -28,7 +28,7 @@ export function OutpostEditor() {
 
       <div className="settings-body">
         <div className="settings-map-col">
-          <strong>{isAdmin ? "지도 미리보기 (클릭하여 마커 추가)" : "지도 미리보기 (조회 전용)"}</strong>
+          <strong>{isAdmin ? "지도 미리보기 (클릭하여 초소 추가)" : "지도 미리보기 (조회 전용)"}</strong>
           <div className="map-wrap" style={{ marginTop: "0.4rem" }}>
             <img
               src={outpostMapImageUrl()}

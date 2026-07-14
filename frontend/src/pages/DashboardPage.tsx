@@ -92,6 +92,7 @@ function DashboardPageInner() {
         <div className="dashboard-panel">
           <div>
             <strong>초소 위치</strong>
+            <div className="camera-caption">사람 탐지 시 해당 초소가 빨간색으로 점멸</div>
             <MiniMap
               outposts={outposts}
               selectedIds={mapSelectedIds}
