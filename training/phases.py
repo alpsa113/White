@@ -37,6 +37,11 @@ class PhaseConfig:
     fus_reg_weight: float | None = None
     empty_objectness_weight: float = 1.0
 
+    # 학습률 조정값. lr_scale은 페이즈 기본 learning rate에 곱하고,
+    # unfreeze_lr는 phase3 백본 동결 해제 시 전체 파라미터 그룹에 적용한다.
+    lr_scale: float = 1.0
+    unfreeze_lr: float = 5e-6
+
     # 클래스 가중치 (index: person=0, boar=1, deer=2, non_target=3)
     class_weights: list[float] = field(default_factory=lambda: [1.0, 1.0, 1.0, 0.1])
 
@@ -81,11 +86,17 @@ PHASE_DEFAULTS: dict[int, PhaseConfig] = {
 }
 
 
-def build_optimizer(model, phase: int) -> optim.Optimizer:
+def build_optimizer(model, phase: int, cfg: PhaseConfig | None = None) -> optim.Optimizer:
     """모델의 파라미터 그룹을 읽어 AdamW optimizer 생성."""
     param_groups = model.get_param_groups(phase)
     # 빈 파라미터 그룹 제거
     param_groups = [g for g in param_groups if len(list(g["params"])) > 0]
+    lr_scale = (cfg or PHASE_DEFAULTS[phase]).lr_scale
+    if lr_scale <= 0:
+        raise ValueError("lr_scale은 0보다 커야 합니다.")
+    if lr_scale != 1.0:
+        for group in param_groups:
+            group["lr"] = group["lr"] * lr_scale
     return optim.AdamW(param_groups, weight_decay=1e-4)
 
 
@@ -149,7 +160,7 @@ class PhaseScheduler:
         ):
             print(f"[페이즈 스케줄러] 에폭 {epoch}: 백본 동결을 해제했습니다.")
             self.model.unfreeze_backbone()
-            self._set_all_param_group_lr(5e-6)
+            self._set_all_param_group_lr(self.cfg.unfreeze_lr)
             self._backbone_unfrozen = True
 
     def restore_for_epoch(self, epoch: int):

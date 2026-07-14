@@ -56,7 +56,7 @@ class Trainer:
         self.model.to(self.device)
 
         # optimizer와 학습률 스케줄러
-        self.optimizer = build_optimizer(model, phase)
+        self.optimizer = build_optimizer(model, phase, self.cfg)
         self.lr_scheduler = build_scheduler(self.optimizer, self.cfg.max_epochs)
 
         # 페이즈 스케줄러(flag 관리)
