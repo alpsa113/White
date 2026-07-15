@@ -56,6 +56,10 @@ class BoxRecord:
     visible_ratio: float
     bbox_area_ratio: float
 
+    @property
+    def aspect_ratio(self) -> float:
+        return self.w / self.h if self.h > 0 else 0.0
+
 
 @dataclass
 class ImageRecord:
@@ -187,6 +191,37 @@ def _filter_existing_images(root: Path, records: list[ImageRecord]) -> list[Imag
     if missing:
         print(f"이미지 파일이 없어 제외된 ForestPersons 샘플: {missing}개")
     return kept
+
+
+def _parse_csv_values(value: str) -> set[str]:
+    return {item.strip().lower() for item in value.split(",") if item.strip()}
+
+
+def _filter_phase1_strict_candidates(
+    records: list[ImageRecord],
+    min_area_ratio: float,
+    max_area_ratio: float,
+    min_aspect: float,
+    max_aspect: float,
+    poses: set[str],
+    min_visible_ratio: float,
+) -> list[ImageRecord]:
+    """phase1 사람 특징 학습에 적합한 bbox가 하나 이상 있는 이미지만 남긴다."""
+
+    filtered = []
+    for record in records:
+        for box in record.boxes:
+            if not (min_area_ratio <= box.bbox_area_ratio <= max_area_ratio):
+                continue
+            if not (min_aspect <= box.aspect_ratio <= max_aspect):
+                continue
+            if poses and box.pose not in poses:
+                continue
+            if box.visible_ratio < min_visible_ratio:
+                continue
+            filtered.append(record)
+            break
+    return filtered
 
 
 def _quantile(values: list[float], q: float) -> float:
@@ -477,10 +512,28 @@ def convert(args: argparse.Namespace) -> None:
 
     records = _read_csv_files(root, split_files)
     records = _filter_existing_images(root, records)
+    phase1_pool = records
+    if args.phase1_strict:
+        phase1_pool = _filter_phase1_strict_candidates(
+            records,
+            min_area_ratio=args.phase1_strict_min_area,
+            max_area_ratio=args.phase1_strict_max_area,
+            min_aspect=args.phase1_strict_min_aspect,
+            max_aspect=args.phase1_strict_max_aspect,
+            poses=_parse_csv_values(args.phase1_strict_poses),
+            min_visible_ratio=args.phase1_strict_min_visible,
+        )
+        print(
+            "phase1 strict 후보: "
+            f"{len(phase1_pool)}개 / 전체 {len(records)}개 "
+            f"(area={args.phase1_strict_min_area:.3f}~{args.phase1_strict_max_area:.3f}, "
+            f"aspect={args.phase1_strict_min_aspect:.2f}~{args.phase1_strict_max_aspect:.2f}, "
+            f"pose={args.phase1_strict_poses}, visible>={args.phase1_strict_min_visible:g})"
+        )
     size_buckets = _assign_size_buckets(records)
 
     phase1_records = _sample_phase_records(
-        records=records,
+        records=phase1_pool,
         count=args.phase1_count,
         rng=rng,
         size_buckets=size_buckets,
@@ -556,6 +609,17 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--phase3-output", default="data/gop_raw/single", help="phase3 single 출력 루트")
     parser.add_argument("--phase1-count", type=int, default=4000, help="phase1로 변환할 이미지 수")
     parser.add_argument("--phase3-count", type=int, default=2000, help="phase3로 변환할 이미지 수")
+    parser.add_argument(
+        "--phase1-strict",
+        action="store_true",
+        help="phase1 후보를 standing/visible/bbox 기준으로 엄격하게 필터링",
+    )
+    parser.add_argument("--phase1-strict-min-area", type=float, default=0.02)
+    parser.add_argument("--phase1-strict-max-area", type=float, default=0.15)
+    parser.add_argument("--phase1-strict-min-aspect", type=float, default=0.25)
+    parser.add_argument("--phase1-strict-max-aspect", type=float, default=0.75)
+    parser.add_argument("--phase1-strict-poses", default="standing")
+    parser.add_argument("--phase1-strict-min-visible", type=float, default=70.0)
     parser.add_argument("--phase1-prefix", default="fp_p1", help="phase1 출력 파일 prefix")
     parser.add_argument("--phase3-prefix", default="fp_p3", help="phase3 출력 파일 prefix")
     parser.add_argument("--modality", choices=["rgb", "tir"], default="rgb", help="출력 modality")
