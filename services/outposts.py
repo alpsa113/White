@@ -11,10 +11,23 @@ def get_outposts() -> list[dict]:
     return store.outposts
 
 
-def get_map_image_bytes() -> bytes:
-    """프리셋 지도 이미지 바이트를 반환합니다."""
+def get_map_image() -> tuple[bytes, str]:
+    """지도 이미지 바이트와 content-type을 반환합니다. 업로드로 교체된 이미지가 있으면 그것을,
+    없으면 프리셋 파일을 반환합니다."""
+    if store.map_image_override is not None:
+        return store.map_image_override["data"], store.map_image_override["content_type"]
     with open(PRESET_MAP_IMAGE_PATH, "rb") as f:
-        return f.read()
+        return f.read(), "image/png"
+
+
+def set_map_image(data: bytes, content_type: str) -> None:
+    """관리자가 업로드한 이미지로 초소 지도를 교체합니다."""
+    store.map_image_override = {"data": data, "content_type": content_type}
+    store.map_image_version += 1
+
+
+def get_map_image_version() -> int:
+    return store.map_image_version
 
 
 def add_marker(x_ratio: float, y_ratio: float) -> dict:

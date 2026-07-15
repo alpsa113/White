@@ -8,6 +8,10 @@ _lock = threading.RLock()
 outposts: list[dict] = []
 _outpost_id_counter = 0
 
+# ---- 초소 지도 이미지(업로드로 교체 시 프리셋 파일 대신 이 값을 사용, 재시작 시 초기화) ----
+map_image_override: dict | None = None  # {"data": bytes, "content_type": str}
+map_image_version = 0
+
 # ---- 탐지 로그(메모리 캐시, RDS 미러 — RDS 미사용 시 유일한 저장소) ----
 detection_logs: list[dict] = []
 next_alert_id = 1

@@ -34,6 +34,19 @@ export function useDeleteOutpost() {
   });
 }
 
+/** 지도 이미지 버전 — 값이 바뀌면 <img> URL에 붙여 캐시를 무효화합니다. */
+export function useMapImageVersion() {
+  return useQuery({ queryKey: ["map-image-version"], queryFn: api.getOutpostMapImageVersion });
+}
+
+export function useUploadMapImage() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (file: File) => api.uploadOutpostMapImage(file),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["map-image-version"] }),
+  });
+}
+
 // ── Cameras ──────────────────────────────────────────────────────────────
 export function useCameras() {
   return useQuery({ queryKey: ["cameras"], queryFn: api.getCameras });

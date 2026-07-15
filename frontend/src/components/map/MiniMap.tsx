@@ -2,6 +2,7 @@
 // 점멸은 사람 탐지 알림(토스트)이 오면 켜지고, 사용자가 × 버튼으로 끄기 전까지는 화면상 사람이
 // 사라져도 자동으로 꺼지지 않습니다(LiveDetectionContext의 personAlertActiveByCamera).
 import { outpostMapImageUrl } from "../../api/client";
+import { useMapImageVersion } from "../../api/hooks";
 import { useLiveDetection } from "../../context/LiveDetectionContext";
 import type { Outpost } from "../../types";
 
@@ -17,6 +18,7 @@ interface MiniMapProps {
 
 export function MiniMap({ outposts, selectedIds, visibleIds, onToggleSelect }: MiniMapProps) {
   const { personAlertActiveByCamera, dismissCameraPersonLight } = useLiveDetection();
+  const { data: mapImageVersion } = useMapImageVersion();
 
   if (outposts.length === 0) {
     return (
@@ -28,7 +30,7 @@ export function MiniMap({ outposts, selectedIds, visibleIds, onToggleSelect }: M
 
   return (
     <div className="map-wrap">
-      <img src={outpostMapImageUrl()} alt="초소 지도" />
+      <img src={outpostMapImageUrl(mapImageVersion?.version)} alt="초소 지도" />
       {outposts.map((o, i) => {
         const isBlinking = Boolean(personAlertActiveByCamera[o.id]);
         const selected = selectedIds.has(o.id);

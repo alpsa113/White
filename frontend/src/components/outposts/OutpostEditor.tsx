@@ -1,17 +1,27 @@
 // components/outposts/OutpostEditor.tsx — 설정 페이지: 초소 위치 지도(클릭 마킹) + 정보 편집기.
-// ui/outposts/editor.py 이식. admin은 편집(클릭 추가/정보 수정/삭제), user는 조회만.
+// ui/outposts/editor.py 이식. admin은 편집(클릭 추가/정보 수정/삭제/지도 이미지 교체), user는 조회만.
 // 영상은 로컬 경로로 지정되므로 업로드 UI는 없습니다.
-import { type MouseEvent } from "react";
+import { type ChangeEvent, type MouseEvent, useRef } from "react";
 import { outpostMapImageUrl } from "../../api/client";
-import { useCreateOutpost, useDeleteOutpost, useOutposts, useUpdateOutpost } from "../../api/hooks";
+import {
+  useCreateOutpost,
+  useDeleteOutpost,
+  useMapImageVersion,
+  useOutposts,
+  useUpdateOutpost,
+  useUploadMapImage,
+} from "../../api/hooks";
 import { useAuth } from "../../context/AuthContext";
 
 export function OutpostEditor() {
   const { isAdmin } = useAuth();
   const { data: outposts = [] } = useOutposts();
+  const { data: mapImageVersion } = useMapImageVersion();
   const createMutation = useCreateOutpost();
   const updateMutation = useUpdateOutpost();
   const deleteMutation = useDeleteOutpost();
+  const uploadMapImageMutation = useUploadMapImage();
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleMapClick = (e: MouseEvent<HTMLImageElement>) => {
     if (!isAdmin) return;
@@ -21,6 +31,12 @@ export function OutpostEditor() {
     createMutation.mutate({ x_ratio, y_ratio });
   };
 
+  const handleMapImageChange = (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (file) uploadMapImageMutation.mutate(file);
+  };
+
   return (
     <div>
       <h3>초소 위치 상황판</h3>
@@ -28,10 +44,31 @@ export function OutpostEditor() {
 
       <div className="settings-body">
         <div className="settings-map-col">
-          <strong>{isAdmin ? "지도 미리보기 (클릭하여 초소 추가)" : "지도 미리보기 (조회 전용)"}</strong>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.5rem" }}>
+            <strong>{isAdmin ? "지도 미리보기 (클릭하여 초소 추가)" : "지도 미리보기 (조회 전용)"}</strong>
+            {isAdmin && (
+              <>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  style={{ display: "none" }}
+                  onChange={handleMapImageChange}
+                />
+                <button
+                  className="btn btn-sm"
+                  type="button"
+                  disabled={uploadMapImageMutation.isPending}
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  {uploadMapImageMutation.isPending ? "업로드 중..." : "지도 이미지 업로드"}
+                </button>
+              </>
+            )}
+          </div>
           <div className="map-wrap" style={{ marginTop: "0.4rem" }}>
             <img
-              src={outpostMapImageUrl()}
+              src={outpostMapImageUrl(mapImageVersion?.version)}
               alt="초소 지도"
               onClick={handleMapClick}
               style={{ cursor: isAdmin ? "crosshair" : "default" }}

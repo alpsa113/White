@@ -1,5 +1,5 @@
 """routers/outposts.py — 초소(지도 마커) CRUD."""
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, UploadFile
 from fastapi.responses import Response
 from pydantic import BaseModel
 
@@ -75,4 +75,21 @@ def delete_outpost(outpost_id: str):
 
 @router.get("/map-image")
 def get_map_image():
-    return Response(content=outposts_service.get_map_image_bytes(), media_type="image/png")
+    data, content_type = outposts_service.get_map_image()
+    return Response(content=data, media_type=content_type)
+
+
+@router.get("/map-image/version")
+def get_map_image_version():
+    return {"version": outposts_service.get_map_image_version()}
+
+
+@router.post("/map-image")
+async def upload_map_image(file: UploadFile):
+    if not (file.content_type or "").startswith("image/"):
+        raise HTTPException(status_code=400, detail="이미지 파일만 업로드할 수 있습니다.")
+    data = await file.read()
+    if not data:
+        raise HTTPException(status_code=400, detail="빈 파일은 업로드할 수 없습니다.")
+    outposts_service.set_map_image(data, file.content_type)
+    return {"version": outposts_service.get_map_image_version()}

@@ -45,7 +45,8 @@ USERS = {
     "user": {"password": "user1234", "role": "user"},
 }
 
-# 초소 지도 이미지 경로 (고정 파일, 업로드 아님)
+# 초소 지도 이미지 경로 (기본값). 관리자가 설정 페이지에서 이미지를 업로드하면 해당 요청
+# 프로세스가 살아있는 동안은 업로드된 이미지가 이 기본값을 대체합니다(재시작 시 초기화).
 PRESET_MAP_IMAGE_PATH = os.path.join(os.path.dirname(__file__), "assets", "gop_preset_map.png")
 
 # 시연용 사전 등록 영상 — 마커 위치는 여전히 관리자가 지도에서 직접 찍어야 합니다. 이 목록을

@@ -74,8 +74,30 @@ export function deleteOutpost(id: string): Promise<void> {
   return request<void>(`/api/outposts/${id}`, { method: "DELETE" });
 }
 
-export function outpostMapImageUrl(): string {
-  return `${API_BASE_URL}/api/outposts/map-image`;
+export function outpostMapImageUrl(version?: number): string {
+  const base = `${API_BASE_URL}/api/outposts/map-image`;
+  return version === undefined ? base : `${base}?v=${version}`;
+}
+
+export function getOutpostMapImageVersion(): Promise<{ version: number }> {
+  return request<{ version: number }>("/api/outposts/map-image/version");
+}
+
+export async function uploadOutpostMapImage(file: File): Promise<{ version: number }> {
+  const form = new FormData();
+  form.append("file", file);
+  const res = await fetch(`${API_BASE_URL}/api/outposts/map-image`, { method: "POST", body: form });
+  if (!res.ok) {
+    let detail = res.statusText;
+    try {
+      const body = await res.json();
+      detail = body?.detail ?? detail;
+    } catch {
+      /* ignore non-json error body */
+    }
+    throw new ApiError(res.status, detail);
+  }
+  return (await res.json()) as { version: number };
 }
 
 // ── Cameras ──────────────────────────────────────────────────────────────
