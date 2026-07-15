@@ -3,7 +3,7 @@
 // 자동으로 사라지지 않고, 해당 초소에 다음 알림이 발생하기 전까지 유지됩니다.
 import { useEffect, useState } from "react";
 import { useLiveDetection } from "../../context/LiveDetectionContext";
-import { fmtElapsed } from "../../utils/formatters";
+import { fmtElapsed, isPersonClass } from "../../utils/formatters";
 
 const CLASS_ICONS: Record<string, string> = {
   사람: "🚶",
@@ -31,9 +31,12 @@ export function CameraAlertBox({ cameraName }: CameraAlertBoxProps) {
   if (alerts.length === 0 || closedCameraAlerts[cameraName]) return null;
 
   const [latest, ...rest] = alerts;
+  // 사람 탐지는 더 눈에 띄어야 하므로 알림 박스 테두리를 빨간색으로 점멸시킵니다.
+  // × 버튼으로 알림을 닫기 전까지는 자동으로 꺼지지 않습니다.
+  const personBlink = isPersonClass(latest.class_name);
 
   return (
-    <div className="camera-alert-box">
+    <div className={`camera-alert-box${personBlink ? " camera-alert-box-person" : ""}`}>
       <button
         type="button"
         className="camera-alert-close"

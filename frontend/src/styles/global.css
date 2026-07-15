@@ -447,6 +447,21 @@ button.camera-title {
   padding: 0.4rem 1.6rem 0.4rem 0.5rem;
   animation: animal-toast-in 0.2s ease-out;
 }
+@keyframes camera-alert-box-blink {
+  0%,
+  100% {
+    border-color: #f85149;
+  }
+  50% {
+    border-color: var(--color-panel-border);
+  }
+}
+.camera-alert-box-person {
+  border-width: 1px;
+  animation:
+    animal-toast-in 0.2s ease-out,
+    camera-alert-box-blink 1s infinite;
+}
 .camera-alert-close {
   position: absolute;
   top: 0.15rem;
