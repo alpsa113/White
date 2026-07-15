@@ -3,6 +3,13 @@
 // Range 요청으로 서빙하므로 브라우저가 직접 디코딩합니다(끊김 없음). 탐지 결과는 업로드 시점에
 // 한 번 분석되어 타임라인(t=ms, dets[])으로 캐시되며, video.currentTime에 가장 가까운 항목을
 // 매 프레임 찾아 캔버스에 그립니다.
+//
+// EO/TIR 두 채널의 <video>를 항상 동시에 마운트해두고(둘 다 자체 페이스로 끊김 없이 계속 재생),
+// 채널 버튼은 둘 중 어느 쪽을 보여줄지만 CSS로 토글합니다. 예전에는 활성 채널이 바뀔 때마다
+// <video src>를 새로 로드했는데, 그러면 재생 위치가 0으로 리셋되고(브라우저의 media load
+// algorithm) 서버의 실시간 알림 페이서(video_analyzer.py, 채널마다 독립적으로 자체 시계로 도는
+// 스레드)와 화면 타이밍이 어긋났습니다. 두 영상을 항상 함께 재생해두면 애초에 리로드 자체가
+// 없으므로 이 문제가 구조적으로 사라집니다.
 import { forwardRef, useEffect, useMemo, useRef, useState, type CSSProperties, type MutableRefObject } from "react";
 import { videoUrl } from "../../api/client";
 import { useAnalysisStatus, useDetectionsTimeline } from "../../api/hooks";
@@ -19,6 +26,8 @@ const DEFAULT_BOX_COLOR = "#58a6ff";
 interface VideoWithOverlayProps {
   camera: Camera;
   channel: Channel;
+  eoAvailable: boolean;
+  tirAvailable: boolean;
   style?: CSSProperties;
 }
 
@@ -63,104 +72,150 @@ function drawDetections(canvas: HTMLCanvasElement, dets: TimelineDetection[]) {
   }
 }
 
+const LAYER_STYLE: CSSProperties = { position: "absolute", inset: 0 };
+
+interface ChannelLayerProps {
+  camera: Camera;
+  channel: Channel;
+  active: boolean;
+  onVideoRef: (channel: Channel, el: HTMLVideoElement | null) => void;
+}
+
+/** 채널 하나(EO 또는 TIR)의 <video>+<canvas>. active가 아니어도 마운트된 채 계속 재생되며,
+ * 화면에는 CSS(display)로만 나타나거나 숨겨집니다 — 그래서 채널을 전환해도 재생 위치가
+ * 절대 리셋되지 않습니다. */
+function ChannelLayer({ camera, channel, active, onVideoRef }: ChannelLayerProps) {
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const timelineRef = useRef<TimelineEntry[]>([]);
+  const rafRef = useRef<number | null>(null);
+  const [videoSize, setVideoSize] = useState<{ w: number; h: number } | null>(null);
+
+  const { data: analysisStatus } = useAnalysisStatus(camera.id, channel);
+  const status = analysisStatus?.status ?? "idle";
+  const ready = status === "ready";
+
+  const { data: timeline = [] } = useDetectionsTimeline(camera.id, channel, ready);
+  timelineRef.current = timeline;
+
+  const setVideoRef = (el: HTMLVideoElement | null) => {
+    videoRef.current = el;
+    onVideoRef(channel, el);
+  };
+
+  // 화면에 보이는 채널만 캔버스에 박스를 그립니다(숨겨진 채널은 재생만 계속하고 그리기는 생략).
+  useEffect(() => {
+    if (!ready || !active) return;
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    if (!video || !canvas) return;
+
+    const tick = () => {
+      const tMs = video.currentTime * 1000;
+      const entry = findNearestEntry(timelineRef.current, tMs);
+      const dets = entry?.dets ?? [];
+
+      if (canvas.width !== video.videoWidth && video.videoWidth > 0) canvas.width = video.videoWidth;
+      if (canvas.height !== video.videoHeight && video.videoHeight > 0) canvas.height = video.videoHeight;
+      if (canvas.width > 0 && canvas.height > 0) drawDetections(canvas, dets);
+
+      rafRef.current = requestAnimationFrame(tick);
+    };
+    rafRef.current = requestAnimationFrame(tick);
+    return () => {
+      if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
+    };
+  }, [ready, active, camera.id, channel]);
+
+  const handleLoadedMetadata = () => {
+    const v = videoRef.current;
+    if (!v) return;
+    setVideoSize({ w: v.videoWidth, h: v.videoHeight });
+    const canvas = canvasRef.current;
+    if (canvas) {
+      canvas.width = v.videoWidth;
+      canvas.height = v.videoHeight;
+    }
+  };
+
+  const src = useMemo(() => videoUrl(camera.id, channel), [camera.id, channel]);
+  const layerStyle: CSSProperties = { ...LAYER_STYLE, display: active ? "block" : "none" };
+
+  if (status === "idle") {
+    return active ? <div className="camera-placeholder" style={LAYER_STYLE}>매핑된 영상 없음</div> : null;
+  }
+
+  if (status === "error") {
+    return active ? (
+      <div className="camera-placeholder camera-analysis-error" style={LAYER_STYLE}>
+        영상 분석 실패{analysisStatus?.error ? `: ${analysisStatus.error}` : ""}
+      </div>
+    ) : null;
+  }
+
+  if (status === "analyzing") {
+    if (!active) return null;
+    const pct = Math.round((analysisStatus?.progress ?? 0) * 100);
+    return (
+      <div className="camera-placeholder camera-analysis-loading" style={LAYER_STYLE}>
+        <div>분석 중... {pct}%</div>
+        <div className="camera-analysis-progress-track">
+          <div className="camera-analysis-progress-fill" style={{ width: `${pct}%` }} />
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="video-overlay-wrap" style={layerStyle}>
+      <video
+        ref={setVideoRef}
+        src={src}
+        autoPlay
+        muted
+        loop
+        playsInline
+        controls={false}
+        onLoadedMetadata={handleLoadedMetadata}
+      />
+      <canvas ref={canvasRef} width={videoSize?.w ?? 0} height={videoSize?.h ?? 0} />
+    </div>
+  );
+}
+
 export const VideoWithOverlay = forwardRef<HTMLVideoElement, VideoWithOverlayProps>(
-  function VideoWithOverlay({ camera, channel, style }, forwardedRef) {
-    const videoRef = useRef<HTMLVideoElement | null>(null);
-    const canvasRef = useRef<HTMLCanvasElement | null>(null);
-    const timelineRef = useRef<TimelineEntry[]>([]);
-    const rafRef = useRef<number | null>(null);
-    const [videoSize, setVideoSize] = useState<{ w: number; h: number } | null>(null);
+  function VideoWithOverlay({ camera, channel, eoAvailable, tirAvailable, style }, forwardedRef) {
+    const videoRefs = useRef<Partial<Record<Channel, HTMLVideoElement | null>>>({});
 
-    const { data: analysisStatus } = useAnalysisStatus(camera.id, channel);
-    const status = analysisStatus?.status ?? "idle";
-    const ready = status === "ready";
-
-    const { data: timeline = [] } = useDetectionsTimeline(camera.id, channel, ready);
-    timelineRef.current = timeline;
-
-    // forwardedRef와 내부 videoRef를 함께 채워 부모(CameraCard)가 play()/pause()를 직접 호출할 수 있게 함.
-    const setVideoRef = (el: HTMLVideoElement | null) => {
-      videoRef.current = el;
+    const syncForwardedRef = (el: HTMLVideoElement | null) => {
       if (typeof forwardedRef === "function") forwardedRef(el);
       else if (forwardedRef) (forwardedRef as MutableRefObject<HTMLVideoElement | null>).current = el;
     };
 
-    // 매 프레임: 현재 탐지 결과로 캔버스(박스 오버레이) 갱신.
-    useEffect(() => {
-      if (!ready) return;
-      const video = videoRef.current;
-      const canvas = canvasRef.current;
-      if (!video || !canvas) return;
-
-      const tick = () => {
-        const tMs = video.currentTime * 1000;
-        const entry = findNearestEntry(timelineRef.current, tMs);
-        const dets = entry?.dets ?? [];
-
-        if (canvas.width !== video.videoWidth && video.videoWidth > 0) canvas.width = video.videoWidth;
-        if (canvas.height !== video.videoHeight && video.videoHeight > 0) canvas.height = video.videoHeight;
-        if (canvas.width > 0 && canvas.height > 0) drawDetections(canvas, dets);
-
-        rafRef.current = requestAnimationFrame(tick);
-      };
-      rafRef.current = requestAnimationFrame(tick);
-      return () => {
-        if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
-      };
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [ready, camera.id, channel]);
-
-    const handleLoadedMetadata = () => {
-      const v = videoRef.current;
-      if (!v) return;
-      setVideoSize({ w: v.videoWidth, h: v.videoHeight });
-      const canvas = canvasRef.current;
-      if (canvas) {
-        canvas.width = v.videoWidth;
-        canvas.height = v.videoHeight;
-      }
+    const handleVideoRef = (ch: Channel, el: HTMLVideoElement | null) => {
+      videoRefs.current[ch] = el;
+      if (ch === channel) syncForwardedRef(el);
     };
 
-    const src = useMemo(() => videoUrl(camera.id, channel), [camera.id, channel]);
+    // 활성 채널이 바뀌면(마운트/언마운트 없이 display만 토글되므로) 부모가 들고 있는 ref도
+    // 새로 활성화된 <video>를 가리키도록 다시 맞춰줍니다.
+    useEffect(() => {
+      syncForwardedRef(videoRefs.current[channel] ?? null);
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [channel]);
 
-    if (status === "idle") {
+    if (!eoAvailable && !tirAvailable) {
       return <div className="camera-placeholder">매핑된 영상 없음</div>;
     }
 
-    if (status === "error") {
-      return (
-        <div className="camera-placeholder camera-analysis-error">
-          영상 분석 실패{analysisStatus?.error ? `: ${analysisStatus.error}` : ""}
-        </div>
-      );
-    }
-
-    if (status === "analyzing") {
-      const pct = Math.round((analysisStatus?.progress ?? 0) * 100);
-      return (
-        <div className="camera-placeholder camera-analysis-loading">
-          <div>분석 중... {pct}%</div>
-          <div className="camera-analysis-progress-track">
-            <div className="camera-analysis-progress-fill" style={{ width: `${pct}%` }} />
-          </div>
-        </div>
-      );
-    }
-
     return (
-      <div className="video-overlay-wrap" style={style}>
-        <video
-          key={`${camera.id}-${channel}`}
-          ref={setVideoRef}
-          src={src}
-          autoPlay
-          muted
-          loop
-          playsInline
-          controls={false}
-          onLoadedMetadata={handleLoadedMetadata}
-        />
-        <canvas ref={canvasRef} width={videoSize?.w ?? 0} height={videoSize?.h ?? 0} />
+      <div className="video-overlay-wrap" style={{ position: "relative", ...style }}>
+        {eoAvailable && (
+          <ChannelLayer camera={camera} channel="eo" active={channel === "eo"} onVideoRef={handleVideoRef} />
+        )}
+        {tirAvailable && (
+          <ChannelLayer camera={camera} channel="tir" active={channel === "tir"} onVideoRef={handleVideoRef} />
+        )}
       </div>
     );
   }

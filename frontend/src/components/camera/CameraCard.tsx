@@ -108,8 +108,6 @@ export function CameraCard({
 
   const resetZoom = () => setZoom({ scale: 1, panX: 0, panY: 0 });
 
-  const channelAvailable = channel === "eo" ? eoAvailable : tirAvailable;
-
   return (
     <div className={`camera-card${!isGrid ? " spotlight" : ""}`}>
       <div className="camera-topbar">
@@ -174,19 +172,17 @@ export function CameraCard({
         style={{ cursor: showFocusedControls ? "grab" : "default" }}
       >
         <CameraAlertBox cameraName={camera.name} />
-        {channelAvailable ? (
-          <VideoWithOverlay
-            ref={videoRef}
-            camera={camera}
-            channel={channel}
-            style={{
-              transformOrigin: "0 0",
-              transform: `translate(${zoom.panX}px, ${zoom.panY}px) scale(${zoom.scale})`,
-            }}
-          />
-        ) : (
-          <div className="camera-placeholder">매핑된 영상 없음</div>
-        )}
+        <VideoWithOverlay
+          ref={videoRef}
+          camera={camera}
+          channel={channel}
+          eoAvailable={eoAvailable}
+          tirAvailable={tirAvailable}
+          style={{
+            transformOrigin: "0 0",
+            transform: `translate(${zoom.panX}px, ${zoom.panY}px) scale(${zoom.scale})`,
+          }}
+        />
       </div>
     </div>
   );
