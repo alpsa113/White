@@ -55,13 +55,13 @@ PRESET_MAP_IMAGE_PATH = os.path.join(os.path.dirname(__file__), "assets", "gop_p
 # 비워두면(기본값) 기존처럼 마커를 찍은 뒤 업로드해야 합니다. eo_path/tir_path는 한쪽만 있어도 됩니다.
 DEMO_VIDEOS: list[dict] = [
     {"info": "초소1",
-     "eo_path": r"videos//video4.mp4", "tir_path": r"videos//video1.mp4"},
+     "eo_path": r"videos//고라니와철책_EO.mov", "tir_path": r"videos//고라니와철책_TIR.mov"},
     {"info": "초소2",
-     "eo_path": r"videos//video3.mp4", "tir_path": r"videos//video2.mp4"},
+     "eo_path": r"videos//멧돼지와철책_EO.mov", "tir_path": r"videos//멧돼지와철책_TIR.mov"},
     {"info": "초소3",
-     "eo_path": r"videos//video1.mp4", "tir_path": r"videos//video3.mp4"},
+     "eo_path": r"videos//GOP배경_EO.jpg", "tir_path": r"videos//GOP배경_TIR.jpg"},
     {"info": "초소4",
-     "eo_path": r"videos//video2.mp4", "tir_path": r"videos//video4.mp4"},
+     "eo_path": r"videos//뒤로뛰는사람_EO.mov", "tir_path": r"videos//뒤로뛰는사람_TIR.mov"},
 ]
 
 # 카메라 개수 상한 (실제 개수는 초소 마커 개수로 결정됨)

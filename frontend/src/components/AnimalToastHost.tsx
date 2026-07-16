@@ -22,6 +22,11 @@ export function AnimalToastHost() {
   // 이벤트는 이미 실시간 감시 페이지의 카메라 카드 알림으로 확인했을 것이므로 무시하고,
   // 마운트된 "이후" 새로 들어오는 탐지만 토스트로 띄웁니다.
   const baselineIdRef = useRef<number | null>(null);
+  // react-query가 마운트 직후 예전(로그아웃 전 등) 캐시를 먼저 동기적으로 돌려줄 수 있어,
+  // 그 스냅샷의 최대 id를 기준선으로 삼으면 이후 실제 fetch에서 그 사이 쌓인 탐지가
+  // 한꺼번에 "새 이벤트"로 잡혀 우르르 떴다 사라지는 문제가 있었습니다. id 기준선 외에
+  // 마운트 시각 이후에 실제로 발생한 탐지만 통과시키는 시간 기준선을 함께 둡니다.
+  const mountedAtSecRef = useRef(Date.now() / 1000);
   // 카메라 카드 알림 박스처럼 "N초 전" 표시를 계속 갱신하기 위한 리렌더 트리거.
   const [, setTick] = useState(0);
 
@@ -36,7 +41,9 @@ export function AnimalToastHost() {
       baselineIdRef.current = events.reduce((max, e) => Math.max(max, e.id), 0);
       return;
     }
-    const fresh = events.filter((e) => e.id > (baselineIdRef.current as number));
+    const fresh = events.filter(
+      (e) => e.id > (baselineIdRef.current as number) && e.ts >= mountedAtSecRef.current
+    );
     if (fresh.length === 0) return;
     baselineIdRef.current = Math.max(baselineIdRef.current, ...fresh.map((e) => e.id));
 
