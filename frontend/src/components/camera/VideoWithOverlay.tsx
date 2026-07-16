@@ -73,12 +73,15 @@ function drawDetections(canvas: HTMLCanvasElement, dets: TimelineDetection[]) {
 }
 
 const LAYER_STYLE: CSSProperties = { position: "absolute", inset: 0 };
-// 서버의 실시간 알림 페이서(services/video_analyzer.py) 위치와 주기적으로 다시 맞춰, "알림이 뜬
-// 순간"과 "화면 장면"이 서서히 어긋나지 않도록 합니다. 로딩 직후(버퍼링 등으로 초반 드리프트가
-// 특히 크게 생기기 쉬운 구간)에도 오래 어긋난 채로 두지 않도록 주기를 짧게 잡았습니다.
-const PACER_RESYNC_MS = 5_000;
-// 재생 중 자잘한 오차로 계속 튀지 않도록, 이 이상 어긋났을 때만 다시 seek합니다.
-const PACER_DRIFT_TOLERANCE_SEC = 0.75;
+// 서버의 실시간 알림 페이서(services/video_analyzer.py) 위치를 얼마나 자주 확인할지. 하드
+// seek(점프) 대신 재생 속도만 미세 조정하는 방식이라 자주 확인해도 화면이 튀지 않습니다.
+const PACER_CHECK_MS = 2_000;
+// 이 정도(초) 이하의 오차는 자연스러운 지터로 보고 무시합니다.
+const PACER_SOFT_DRIFT_SEC = 0.15;
+// 이 이상 어긋났을 때만 재생 속도를 살짝 조절해 부드럽게 따라잡습니다(점프하지 않음).
+const PACER_RATE_CORRECTION = 0.06;
+// 버퍼링 등으로 이 이상 크게 어긋난 경우에만 어쩔 수 없이 점프(seek)합니다.
+const PACER_HARD_SEEK_SEC = 3;
 
 interface ChannelLayerProps {
   camera: Camera;
@@ -136,35 +139,61 @@ function ChannelLayer({ camera, channel, active, onVideoRef }: ChannelLayerProps
     };
   }, [ready, active, isImage, camera.id, channel]);
 
-  // 서버 페이서가 지금 타임라인의 어느 지점을 흘려보내고 있는지 물어 <video>를 그 위치로
-  // seek합니다 — 화면에 보이지 않는(비활성) 채널도 다음에 전환했을 때 이미 맞아있도록 계속
-  // 동기화합니다. 브라우저의 duration 추정치로 독립적으로 계산하지 않고 서버 값을 그대로
-  // 신뢰하므로, EO/TIR의 실제 영상 길이가 살짝 달라도 각자 정확한 위치로 맞춰집니다.
+  // 서버 페이서가 지금 타임라인의 어느 지점을 흘려보내고 있는지 물어 <video>를 그 위치에 맞춥니다.
+  // 마운트 직후에는 재생을 시작하기 전에 먼저 정확한 위치로 이동해두어(0프레임이 잠깐 비치고
+  // 점프하는 일 없이) 처음부터 이미 맞는 장면에서 부드럽게 시작합니다. 이후로는 자잘한 오차를
+  // seek(점프)가 아니라 playbackRate 미세 조정으로 따라잡아, 재생이 끊기거나 튀지 않고 처음부터
+  // 끝까지 매끄럽게 흘러가도록 합니다. 화면에 보이지 않는(비활성) 채널도 계속 이 보정을 받으므로
+  // 다음에 채널을 전환해도 이미 맞는 지점을 보여줍니다.
   useEffect(() => {
     if (!ready || isImage) return;
+    const video = videoRef.current;
+    if (!video) return;
     let cancelled = false;
 
-    const sync = async (force: boolean) => {
-      const video = videoRef.current;
-      if (!video) return;
+    const fetchPosition = async (): Promise<number | null> => {
       try {
         const { elapsed_ms } = await getPacerPosition(camera.id, channel);
-        if (cancelled) return;
-        const target = elapsed_ms / 1000;
-        const drift = Math.abs(video.currentTime - target);
-        if (force || drift > PACER_DRIFT_TOLERANCE_SEC) {
-          video.currentTime = target;
-        }
+        return elapsed_ms / 1000;
       } catch {
-        // 페이서가 아직 시작되지 않았으면(분석 직후) 자연 재생에 맡기고 다음 주기에 다시 시도합니다.
+        return null; // 페이서가 아직 시작되지 않았으면(분석 직후) 다음 시도 때 다시 확인합니다.
       }
     };
 
-    sync(true);
-    const id = setInterval(() => sync(false), PACER_RESYNC_MS);
+    const startSynced = async () => {
+      for (let attempt = 0; attempt < 10 && !cancelled; attempt++) {
+        const target = await fetchPosition();
+        if (cancelled) return;
+        if (target !== null) {
+          video.currentTime = target;
+          await video.play().catch(() => {});
+          return;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 300));
+      }
+      if (!cancelled) video.play().catch(() => {});
+    };
+
+    startSynced();
+
+    const id = setInterval(async () => {
+      const target = await fetchPosition();
+      if (cancelled || target === null) return;
+      const drift = video.currentTime - target; // 양수면 화면이 앞서있고, 음수면 뒤처져있음
+      if (Math.abs(drift) > PACER_HARD_SEEK_SEC) {
+        video.currentTime = target;
+        video.playbackRate = 1;
+      } else if (Math.abs(drift) > PACER_SOFT_DRIFT_SEC) {
+        video.playbackRate = drift > 0 ? 1 - PACER_RATE_CORRECTION : 1 + PACER_RATE_CORRECTION;
+      } else {
+        video.playbackRate = 1;
+      }
+    }, PACER_CHECK_MS);
+
     return () => {
       cancelled = true;
       clearInterval(id);
+      video.playbackRate = 1;
     };
   }, [ready, isImage, camera.id, channel]);
 
@@ -220,7 +249,6 @@ function ChannelLayer({ camera, channel, active, onVideoRef }: ChannelLayerProps
       <video
         ref={setVideoRef}
         src={src}
-        autoPlay
         muted
         loop
         playsInline

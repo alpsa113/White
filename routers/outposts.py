@@ -47,16 +47,26 @@ def create_outpost(req: CreateOutpostRequest):
 
 def _start_analysis_for_seeded_video(marker: dict) -> None:
     """add_marker()가 config.DEMO_VIDEOS에서 영상을 자동 배정했다면(video_..._seeded) 사전 분석을
-    미리 시작해둡니다."""
+    미리 시작해둡니다. EO/TIR 둘 다 실제 영상이면(정적 이미지 제외) 두 채널을 서로의
+    expected_channels로 알려줘서, 먼저 분석이 끝난 채널이 혼자 앞서 재생을 시작하지 않고
+    형제 채널까지 준비될 때까지 기다렸다가 동시에 재생을 시작하도록 합니다."""
     if not (marker.get("video_eo_seeded") or marker.get("video_tir_seeded")):
         return
     cameras = camera_registry.get_active_cameras()
     cam = next((c for c in cameras if c["id"] == marker["id"]), {"id": marker["id"], "name": marker["id"]})
+    expected = {
+        channel
+        for channel in ("eo", "tir")
+        if marker.get(f"video_{channel}_seeded")
+        and not video_analyzer.is_image_path(marker[f"video_{channel}_path"])
+    }
     for channel in ("eo", "tir"):
         if not marker.get(f"video_{channel}_seeded"):
             continue
         path = marker[f"video_{channel}_path"]
-        video_analyzer.start_analysis(cam, channel, path, marker.get(f"video_{channel}_name", ""))
+        video_analyzer.start_analysis(
+            cam, channel, path, marker.get(f"video_{channel}_name", ""), expected_channels=expected
+        )
 
 
 @router.put("/{outpost_id}")

@@ -56,6 +56,18 @@ _clip_plans: dict[str, dict[str, list[str | None]]] = {}
 # 진행 중인 정확한 위치를 그때그때 보고합니다.
 _pacer_cycle_start: dict[str, float] = {}  # key -> 이번 바퀴가 시작된 실제 시각(time.time())
 _pacer_duration_sec: dict[str, float] = {}  # key -> 한 바퀴(루프)의 길이(초)
+# cam_id -> 그 카메라의 EO/TIR 채널이 함께 공유하는 재생 루프의 "원점" 시각(time.time()).
+# 늦게 끝난 채널이 혼자 뒤처져 t=0부터 다시 시작하지 않도록, 같은 카메라의 형제 채널들이
+# _cam_expected에 적어둔 채널을 모두 준비 마칠 때까지 기다렸다가(_cam_pending_start) 다같이
+# 이 원점에서 동시에 재생을 시작합니다(_prepare_then_wait_for_siblings 참고).
+_cam_origin: dict[str, float] = {}
+# cam_id -> 그 카메라에서 "같이 시작"을 맞춰야 하는 채널 집합(정적 이미지 채널은 제외 — 재생
+# 루프 자체가 없으므로 대기 대상이 아님). 카메라에 영상 채널이 하나뿐이면 곧바로 시작합니다.
+_cam_expected: dict[str, set[str]] = {}
+# cam_id -> {channel: (cam, video_path, timeline)} — 분석/클립 준비는 끝났지만 형제 채널이
+# 아직 준비되지 않아 대기 중인 채널들의 대기실.
+_cam_pending_start: dict[str, dict[str, tuple]] = {}
+_cam_barrier_lock = threading.Lock()
 
 
 def shutdown() -> None:
@@ -67,6 +79,17 @@ def shutdown() -> None:
 
 def get_status(key: str) -> dict:
     return _status.get(key, {"status": "idle", "progress": 0.0})
+
+
+def _get_cam_origin(cam_id: str) -> float:
+    """카메라(EO/TIR 공통)의 재생 루프 원점을 반환합니다. 보통은 _prepare_then_wait_for_siblings가
+    형제 채널이 모두 모인 순간에 이미 정해둔 값을 그대로 씁니다. 바리어를 거치지 않은 예외적인
+    경로(형제가 없는 단일 채널 카메라 등)에서만 지금 이 순간을 새 원점으로 잡습니다."""
+    origin = _cam_origin.get(cam_id)
+    if origin is None:
+        origin = time.time()
+        _cam_origin[cam_id] = origin
+    return origin
 
 
 def get_pacer_position(key: str) -> float | None:
@@ -98,11 +121,20 @@ def get_timeline(video_path: str) -> list[dict] | None:
     return payload
 
 
-def start_analysis(cam: dict, channel: str, video_path: str, filename: str) -> None:
+def start_analysis(
+    cam: dict, channel: str, video_path: str, filename: str, expected_channels: set[str] | None = None
+) -> None:
     """이미 분석돼 있으면 클립 계획만 다시 만들고, 아니면 분석부터 백그라운드로 시작합니다.
     클립 계획(_clip_plans)은 인메모리라 서버 재시작 시 사라지므로 매번 다시 준비합니다.
-    정적 이미지(탐지 대상 없는 배경 컷)는 분석/실시간 페이서 없이 곧바로 표시만 합니다."""
+    정적 이미지(탐지 대상 없는 배경 컷)는 분석/실시간 페이서 없이 곧바로 표시만 합니다.
+
+    expected_channels: 이 카메라에서 재생을 함께 맞춰야 하는(=영상인) 채널 집합. EO/TIR처럼
+    쌍을 이루는 카메라는 호출하는 쪽(routers/outposts.py)에서 두 채널 모두에 같은 집합을
+    넘겨줍니다 — 준비가 먼저 끝난 채널이 있어도 이 집합이 전부 준비될 때까지 재생을 미루고,
+    다 모이면 그 순간을 공동 원점으로 삼아 동시에 시작합니다."""
     key = f"{cam['id']}_{channel}"
+    if expected_channels:
+        _cam_expected[str(cam["id"])] = set(expected_channels)
     if is_image_path(video_path):
         _status[key] = {"status": "ready", "progress": 1.0, "kind": "image"}
         return
@@ -110,7 +142,7 @@ def start_analysis(cam: dict, channel: str, video_path: str, filename: str) -> N
     if cached is not None:
         _status[key] = {"status": "analyzing", "progress": 0.99}
         threading.Thread(
-            target=_prepare_and_start_pacer, args=(cam, video_path, key, cached), daemon=True
+            target=_prepare_then_wait_for_siblings, args=(cam, video_path, key, cached), daemon=True
         ).start()
         return
     _status[key] = {"status": "analyzing", "progress": 0.0}
@@ -127,6 +159,17 @@ def stop_analysis(cid: str, channel: str) -> None:
     _clip_plans.pop(key, None)
     _pacer_cycle_start.pop(key, None)
     _pacer_duration_sec.pop(key, None)
+    with _cam_barrier_lock:
+        pending = _cam_pending_start.get(cid)
+        if pending is not None:
+            pending.pop(channel, None)
+            if not pending:
+                _cam_pending_start.pop(cid, None)
+    # 이 카메라의 마지막 채널까지 다 멈췄으면 공유 원점/대기 집합도 정리합니다 — 남은 채널이
+    # 없으므로 다음에 다시 시작할 때 새로 바리어를 잡아도 아무도 어긋나지 않습니다.
+    if not any(k.startswith(f"{cid}_") for k in _pacer_stop_events):
+        _cam_origin.pop(cid, None)
+        _cam_expected.pop(cid, None)
 
 
 def _run_analysis(cam: dict, video_path: str, key: str) -> None:
@@ -170,16 +213,36 @@ def _run_analysis(cam: dict, video_path: str, key: str) -> None:
         with open(_sidecar_path(video_path), "w", encoding="utf-8") as f:
             json.dump(timeline, f)
 
-        _prepare_and_start_pacer(cam, video_path, key, timeline)
+        _prepare_then_wait_for_siblings(cam, video_path, key, timeline)
     except Exception as e:
         _status[key] = {"status": "error", "progress": 0.0, "error": str(e)}
 
 
-def _prepare_and_start_pacer(cam: dict, video_path: str, key: str, timeline: list[dict]) -> None:
-    """클립 계획을 만든 뒤 "ready"로 전환하고 재생 페이서를 시작합니다(재생 시작 전에 클립까지 준비 완료)."""
+def _prepare_then_wait_for_siblings(cam: dict, video_path: str, key: str, timeline: list[dict]) -> None:
+    """클립 계획을 만들어 이 채널의 재생 준비를 마친 뒤, 같은 카메라의 형제 채널(EO/TIR)이 모두
+    준비될 때까지 대기실(_cam_pending_start)에 들어갑니다. 먼저 끝난 채널은 여기서 멈춰 서서
+    혼자 앞서 재생을 시작하지 않고, 마지막 채널까지 도착하는 순간 다같이 "ready"로 바뀌며
+    바로 그 순간을 공동 원점으로 페이서를 동시에 시작합니다."""
     _build_clip_plan(video_path, cam, key, timeline)
-    _status[key] = {"status": "ready", "progress": 1.0}
-    _start_pacer(cam, video_path, key, timeline)
+    cam_id = str(cam["id"])
+    channel = key.rsplit("_", 1)[-1]
+
+    with _cam_barrier_lock:
+        pending = _cam_pending_start.setdefault(cam_id, {})
+        pending[channel] = (cam, video_path, timeline)
+        expected = _cam_expected.get(cam_id) or {channel}
+        if not expected.issubset(pending.keys()):
+            return  # 아직 형제 채널이 준비되지 않음 — 대기실에서 기다립니다.
+        ready_group = pending
+        _cam_pending_start.pop(cam_id, None)
+
+    # 여기 도달했다는 건 기대하던 채널이 모두 모였다는 뜻 — 지금 이 순간을 공동 원점으로 삼아
+    # 전부 동시에 "ready" + 페이서 시작으로 전환합니다.
+    _cam_origin[cam_id] = time.time()
+    for ch, (c, vpath, tl) in ready_group.items():
+        k = f"{cam_id}_{ch}"
+        _status[k] = {"status": "ready", "progress": 1.0}
+        _start_pacer(c, vpath, k, tl)
 
 
 def _build_clip_plan(video_path: str, cam: dict, key: str, timeline: list[dict]) -> None:
@@ -235,15 +298,27 @@ def _run_pacer(cam: dict, video_path: str, key: str, timeline: list[dict], stop_
     consecutive_grab_failures = 0
     # 한 바퀴(루프)의 길이 — 타임라인의 마지막 타임스탬프를 기준으로 삼습니다(get_pacer_position이
     # "지금 몇 ms 지점인지" 계산할 때 씁니다).
-    _pacer_duration_sec[key] = max(timeline[-1]["t"] / 1000.0, 0.001)
+    duration_sec = max(timeline[-1]["t"] / 1000.0, 0.001)
+    _pacer_duration_sec[key] = duration_sec
+    # 이 카메라의 다른 채널과 공유하는 원점 — 늦게 시작해도 처음(t=0)부터가 아니라 원점 기준
+    # 현재 위치에서 합류합니다.
+    origin = _get_cam_origin(str(cam["id"]))
+    # 합류 시점에 이미 지나간 항목들은 처리하지 않고 조용히 건너뜁니다(그렇지 않으면 시작하자마자
+    # "이미 지난" 알림들이 한꺼번에 몰려서 뜨게 됨). 한 바퀴를 다 돈 뒤에는 항상 처음부터이므로
+    # 더 이상 건너뛸 필요가 없습니다.
+    catching_up = True
 
     while not stop_event.is_set():
-        cycle_start_wall = time.time()
+        now = time.time()
+        elapsed_cycles = int((now - origin) // duration_sec)
+        cycle_start_wall = origin + elapsed_cycles * duration_sec
         _pacer_cycle_start[key] = cycle_start_wall
         for entry in timeline:
             if stop_event.is_set():
                 break
             target_wall = cycle_start_wall + entry["t"] / 1000.0
+            if catching_up and target_wall < time.time():
+                continue
             sleep_for = target_wall - time.time()
             if sleep_for > 0:
                 stop_event.wait(sleep_for)
@@ -279,6 +354,7 @@ def _run_pacer(cam: dict, video_path: str, key: str, timeline: list[dict], stop_
             _attach_planned_clips(key, new_track_infos)
 
         # 한 바퀴 다 돌았으면 트랙을 리셋하고 처음부터 다시(<video loop>와 동일).
+        catching_up = False
         cam_state["person_tracks"] = {}
         cam_state["animal_tracks"] = {}
 
