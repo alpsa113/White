@@ -73,11 +73,12 @@ function drawDetections(canvas: HTMLCanvasElement, dets: TimelineDetection[]) {
 }
 
 const LAYER_STYLE: CSSProperties = { position: "absolute", inset: 0 };
-// 서버의 실시간 알림 페이서(services/video_analyzer.py) 위치와 30초마다 다시 맞춰, 오래 켜둔
-// 세션에서도 "알림이 뜬 순간"과 "화면 장면"이 서서히 어긋나지 않도록 합니다.
-const PACER_RESYNC_MS = 30_000;
+// 서버의 실시간 알림 페이서(services/video_analyzer.py) 위치와 주기적으로 다시 맞춰, "알림이 뜬
+// 순간"과 "화면 장면"이 서서히 어긋나지 않도록 합니다. 로딩 직후(버퍼링 등으로 초반 드리프트가
+// 특히 크게 생기기 쉬운 구간)에도 오래 어긋난 채로 두지 않도록 주기를 짧게 잡았습니다.
+const PACER_RESYNC_MS = 5_000;
 // 재생 중 자잘한 오차로 계속 튀지 않도록, 이 이상 어긋났을 때만 다시 seek합니다.
-const PACER_DRIFT_TOLERANCE_SEC = 1.5;
+const PACER_DRIFT_TOLERANCE_SEC = 0.75;
 
 interface ChannelLayerProps {
   camera: Camera;
