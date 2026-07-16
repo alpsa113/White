@@ -3,6 +3,7 @@
 // 이동해도 계속 폴링/표시되도록 합니다.
 import { useEffect, useRef, useState } from "react";
 import { useRecentToasts } from "../api/hooks";
+import { fmtElapsed } from "../utils/formatters";
 import type { ToastEvent } from "../types";
 
 const CLASS_ICONS: Record<string, string> = {
@@ -21,6 +22,13 @@ export function AnimalToastHost() {
   // 이벤트는 이미 실시간 감시 페이지의 카메라 카드 알림으로 확인했을 것이므로 무시하고,
   // 마운트된 "이후" 새로 들어오는 탐지만 토스트로 띄웁니다.
   const baselineIdRef = useRef<number | null>(null);
+  // 카메라 카드 알림 박스처럼 "N초 전" 표시를 계속 갱신하기 위한 리렌더 트리거.
+  const [, setTick] = useState(0);
+
+  useEffect(() => {
+    const id = setInterval(() => setTick((t) => t + 1), 1000);
+    return () => clearInterval(id);
+  }, []);
 
   useEffect(() => {
     if (!events) return;
@@ -51,7 +59,11 @@ export function AnimalToastHost() {
             {icon ? <span className="animal-toast-icon">{icon}</span> : null}
             <div>
               <div className="animal-toast-title">{t.class_name} 탐지</div>
-              <div className="animal-toast-camera">{t.camera}</div>
+              <div className="animal-toast-meta">
+                <span className="animal-toast-camera">{t.camera}</span>
+                <span className="animal-toast-sep">|</span>
+                <span className="animal-toast-time">{fmtElapsed(t.ts)}</span>
+              </div>
             </div>
           </div>
         );

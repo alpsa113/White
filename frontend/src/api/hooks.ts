@@ -113,7 +113,7 @@ export function useSystemStatus() {
 
 // ── Logs ─────────────────────────────────────────────────────────────────
 export function useLogs() {
-  return useQuery({ queryKey: ["logs"], queryFn: api.getLogs });
+  return useQuery({ queryKey: ["logs"], queryFn: api.getLogs, refetchInterval: 1500 });
 }
 
 export function useSaveLogEdits() {

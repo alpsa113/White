@@ -3,7 +3,7 @@
 // 웹페이지를 새로 열었을 때(최초 로딩) 시점의 최신 id를 기준선으로 삼아, 그 이후 새로 발생한
 // 탐지만 표시합니다(RDS에 쌓인 과거 이력은 '감지 기록' 페이지에서만 노출).
 // 항목을 클릭하면 '감지 기록' 조회 탭과 동일한 상세 정보 + 스냅샷/클립을 모달로 보여줍니다.
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useCameras, useRecentDetections } from "../../api/hooks";
 import { fmtDtDot, isPersonClass } from "../../utils/formatters";
 import { DetectionDetailModal } from "./DetectionDetailModal";
@@ -56,6 +56,27 @@ export function DetectionPanel() {
   }
 
   const items = baselineId === null ? [] : (detections ?? []).filter((d) => d.id > (baselineId as number));
+
+  // 사람이 새로 탐지되면 해당 초소 탭으로 자동 전환합니다. 마운트 시점에 이미 쌓여있던
+  // 항목까지 전환 대상으로 삼으면 페이지 진입 즉시 탭이 튀므로, 처음 한 번은 기준선만
+  // 세우고 이후로 새로 들어오는 사람 탐지에 대해서만 전환합니다.
+  const personAutoSwitchIdRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (items.length === 0) return;
+    if (personAutoSwitchIdRef.current === null) {
+      personAutoSwitchIdRef.current = items.reduce((max, d) => Math.max(max, d.id), 0);
+      return;
+    }
+    const newPersonItems = items.filter(
+      (d) => d.id > (personAutoSwitchIdRef.current as number) && isPersonClass(d.class_name)
+    );
+    if (newPersonItems.length > 0) {
+      const latestPerson = newPersonItems.reduce((a, b) => (b.id > a.id ? b : a));
+      const camera = cameras.find((c) => c.name === latestPerson.camera);
+      if (camera) setActiveCameraId(camera.id);
+    }
+    personAutoSwitchIdRef.current = Math.max(personAutoSwitchIdRef.current, ...items.map((d) => d.id));
+  }, [items, cameras]);
 
   const activeCamera = cameras.find((c) => c.id === activeCameraId) ?? cameras[0];
   const cameraItems = activeCamera ? items.filter((d) => d.camera === activeCamera.name) : [];

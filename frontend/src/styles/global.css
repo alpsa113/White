@@ -427,8 +427,21 @@ button.camera-title {
   font-weight: 600;
   color: var(--color-text);
 }
+.animal-toast-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
 .animal-toast-camera {
   font-size: 0.75rem;
+  color: var(--color-text-muted);
+}
+.animal-toast-sep {
+  font-size: 0.68rem;
+  color: var(--color-panel-border);
+}
+.animal-toast-time {
+  font-size: 0.68rem;
   color: var(--color-text-muted);
 }
 
