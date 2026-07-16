@@ -38,10 +38,24 @@ _clip_executor = ThreadPoolExecutor(max_workers=CLIP_EXTRACTION_WORKERS, thread_
 # 보이고, 매 프레임을 다 도는 것보다 분석 시간을 크게 줄여줍니다.
 SAMPLE_INTERVAL_MS = 200
 
+# 탐지 대상 없이 배경만 찍어둔 정적 이미지 카메라(예: config.py DEMO_VIDEOS의 "GOP배경")를
+# 위한 확장자 목록 — 이 확장자면 cv2 분석/실시간 페이서를 건너뛰고 곧바로 "ready"로 표시합니다.
+IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
+
+
+def is_image_path(path: str) -> bool:
+    return os.path.splitext(path)[1].lower() in IMAGE_EXTENSIONS
+
 _status: dict[str, dict] = {}  # key(f"{cid}_{channel}") -> {"status", "progress", "error"}
 _pacer_stop_events: dict[str, threading.Event] = {}
 # key(f"{cid}_{channel}") -> {카테고리(사람은 tracking.PERSON_PLAN_KEY, 동물은 class_name): [클립 S3 키 또는 None, ...]}
 _clip_plans: dict[str, dict[str, list[str | None]]] = {}
+# 페이서가 지금 타임라인의 어느 지점을 흘려보내고 있는지 — 프론트엔드가 <video>를 이 위치로
+# seek해서, "알림이 뜬 순간"과 "화면에 보이는 장면"이 실제로 일치하도록 맞추는 데 씁니다
+# (get_pacer_position 참고). 브라우저의 duration 추정치에 기대는 대신, 페이서 스스로가
+# 진행 중인 정확한 위치를 그때그때 보고합니다.
+_pacer_cycle_start: dict[str, float] = {}  # key -> 이번 바퀴가 시작된 실제 시각(time.time())
+_pacer_duration_sec: dict[str, float] = {}  # key -> 한 바퀴(루프)의 길이(초)
 
 
 def shutdown() -> None:
@@ -53,6 +67,16 @@ def shutdown() -> None:
 
 def get_status(key: str) -> dict:
     return _status.get(key, {"status": "idle", "progress": 0.0})
+
+
+def get_pacer_position(key: str) -> float | None:
+    """페이서가 지금 타임라인의 몇 ms 지점을 흘려보내고 있는지 실시간으로 계산합니다.
+    아직 페이서가 시작되지 않았으면(분석 중이거나 이미지 카메라) None."""
+    cycle_start = _pacer_cycle_start.get(key)
+    duration_sec = _pacer_duration_sec.get(key)
+    if cycle_start is None or not duration_sec:
+        return None
+    return ((time.time() - cycle_start) % duration_sec) * 1000.0
 
 
 def _sidecar_path(video_path: str) -> str:
@@ -76,8 +100,12 @@ def get_timeline(video_path: str) -> list[dict] | None:
 
 def start_analysis(cam: dict, channel: str, video_path: str, filename: str) -> None:
     """이미 분석돼 있으면 클립 계획만 다시 만들고, 아니면 분석부터 백그라운드로 시작합니다.
-    클립 계획(_clip_plans)은 인메모리라 서버 재시작 시 사라지므로 매번 다시 준비합니다."""
+    클립 계획(_clip_plans)은 인메모리라 서버 재시작 시 사라지므로 매번 다시 준비합니다.
+    정적 이미지(탐지 대상 없는 배경 컷)는 분석/실시간 페이서 없이 곧바로 표시만 합니다."""
     key = f"{cam['id']}_{channel}"
+    if is_image_path(video_path):
+        _status[key] = {"status": "ready", "progress": 1.0, "kind": "image"}
+        return
     cached = get_timeline(video_path)
     if cached is not None:
         _status[key] = {"status": "analyzing", "progress": 0.99}
@@ -97,6 +125,8 @@ def stop_analysis(cid: str, channel: str) -> None:
         ev.set()
     _status.pop(key, None)
     _clip_plans.pop(key, None)
+    _pacer_cycle_start.pop(key, None)
+    _pacer_duration_sec.pop(key, None)
 
 
 def _run_analysis(cam: dict, video_path: str, key: str) -> None:
@@ -203,9 +233,13 @@ def _run_pacer(cam: dict, video_path: str, key: str, timeline: list[dict], stop_
         return
     cam_state = {"person_tracks": {}, "animal_tracks": {}, "last_toasts": {}, "last_dets": []}
     consecutive_grab_failures = 0
+    # 한 바퀴(루프)의 길이 — 타임라인의 마지막 타임스탬프를 기준으로 삼습니다(get_pacer_position이
+    # "지금 몇 ms 지점인지" 계산할 때 씁니다).
+    _pacer_duration_sec[key] = max(timeline[-1]["t"] / 1000.0, 0.001)
 
     while not stop_event.is_set():
         cycle_start_wall = time.time()
+        _pacer_cycle_start[key] = cycle_start_wall
         for entry in timeline:
             if stop_event.is_set():
                 break

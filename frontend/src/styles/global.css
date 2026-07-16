@@ -368,6 +368,7 @@ button.camera-title {
   position: relative;
 }
 .video-overlay-wrap video,
+.video-overlay-wrap img,
 .video-overlay-wrap canvas {
   position: absolute;
   inset: 0;

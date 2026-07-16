@@ -11,7 +11,7 @@
 // 스레드)와 화면 타이밍이 어긋났습니다. 두 영상을 항상 함께 재생해두면 애초에 리로드 자체가
 // 없으므로 이 문제가 구조적으로 사라집니다.
 import { forwardRef, useEffect, useMemo, useRef, useState, type CSSProperties, type MutableRefObject } from "react";
-import { videoUrl } from "../../api/client";
+import { getPacerPosition, videoUrl } from "../../api/client";
 import { useAnalysisStatus, useDetectionsTimeline } from "../../api/hooks";
 import type { Camera, Channel, TimelineDetection, TimelineEntry } from "../../types";
 
@@ -73,6 +73,11 @@ function drawDetections(canvas: HTMLCanvasElement, dets: TimelineDetection[]) {
 }
 
 const LAYER_STYLE: CSSProperties = { position: "absolute", inset: 0 };
+// 서버의 실시간 알림 페이서(services/video_analyzer.py) 위치와 30초마다 다시 맞춰, 오래 켜둔
+// 세션에서도 "알림이 뜬 순간"과 "화면 장면"이 서서히 어긋나지 않도록 합니다.
+const PACER_RESYNC_MS = 30_000;
+// 재생 중 자잘한 오차로 계속 튀지 않도록, 이 이상 어긋났을 때만 다시 seek합니다.
+const PACER_DRIFT_TOLERANCE_SEC = 1.5;
 
 interface ChannelLayerProps {
   camera: Camera;
@@ -94,8 +99,11 @@ function ChannelLayer({ camera, channel, active, onVideoRef }: ChannelLayerProps
   const { data: analysisStatus } = useAnalysisStatus(camera.id, channel);
   const status = analysisStatus?.status ?? "idle";
   const ready = status === "ready";
+  // 탐지 대상 없는 정적 배경 컷(services/video_analyzer.py의 is_image_path) — <video> 대신
+  // <img>로 표시하고, 탐지 타임라인 조회/박스 그리기를 모두 건너뜁니다.
+  const isImage = analysisStatus?.kind === "image";
 
-  const { data: timeline = [] } = useDetectionsTimeline(camera.id, channel, ready);
+  const { data: timeline = [] } = useDetectionsTimeline(camera.id, channel, ready && !isImage);
   timelineRef.current = timeline;
 
   const setVideoRef = (el: HTMLVideoElement | null) => {
@@ -105,7 +113,7 @@ function ChannelLayer({ camera, channel, active, onVideoRef }: ChannelLayerProps
 
   // 화면에 보이는 채널만 캔버스에 박스를 그립니다(숨겨진 채널은 재생만 계속하고 그리기는 생략).
   useEffect(() => {
-    if (!ready || !active) return;
+    if (!ready || !active || isImage) return;
     const video = videoRef.current;
     const canvas = canvasRef.current;
     if (!video || !canvas) return;
@@ -125,7 +133,39 @@ function ChannelLayer({ camera, channel, active, onVideoRef }: ChannelLayerProps
     return () => {
       if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
     };
-  }, [ready, active, camera.id, channel]);
+  }, [ready, active, isImage, camera.id, channel]);
+
+  // 서버 페이서가 지금 타임라인의 어느 지점을 흘려보내고 있는지 물어 <video>를 그 위치로
+  // seek합니다 — 화면에 보이지 않는(비활성) 채널도 다음에 전환했을 때 이미 맞아있도록 계속
+  // 동기화합니다. 브라우저의 duration 추정치로 독립적으로 계산하지 않고 서버 값을 그대로
+  // 신뢰하므로, EO/TIR의 실제 영상 길이가 살짝 달라도 각자 정확한 위치로 맞춰집니다.
+  useEffect(() => {
+    if (!ready || isImage) return;
+    let cancelled = false;
+
+    const sync = async (force: boolean) => {
+      const video = videoRef.current;
+      if (!video) return;
+      try {
+        const { elapsed_ms } = await getPacerPosition(camera.id, channel);
+        if (cancelled) return;
+        const target = elapsed_ms / 1000;
+        const drift = Math.abs(video.currentTime - target);
+        if (force || drift > PACER_DRIFT_TOLERANCE_SEC) {
+          video.currentTime = target;
+        }
+      } catch {
+        // 페이서가 아직 시작되지 않았으면(분석 직후) 자연 재생에 맡기고 다음 주기에 다시 시도합니다.
+      }
+    };
+
+    sync(true);
+    const id = setInterval(() => sync(false), PACER_RESYNC_MS);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, [ready, isImage, camera.id, channel]);
 
   const handleLoadedMetadata = () => {
     const v = videoRef.current;
@@ -162,6 +202,14 @@ function ChannelLayer({ camera, channel, active, onVideoRef }: ChannelLayerProps
         <div className="camera-analysis-progress-track">
           <div className="camera-analysis-progress-fill" style={{ width: `${pct}%` }} />
         </div>
+      </div>
+    );
+  }
+
+  if (isImage) {
+    return (
+      <div className="video-overlay-wrap" style={layerStyle}>
+        <img src={src} alt={`${camera.name} ${channel.toUpperCase()}`} />
       </div>
     );
   }

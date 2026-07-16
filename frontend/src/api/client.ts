@@ -125,6 +125,12 @@ export function getDetectionsTimeline(cameraId: string, channel: Channel): Promi
   return request<TimelineEntry[]>(`/api/cameras/${cameraId}/detections-timeline?channel=${channel}`);
 }
 
+/** 실시간 알림 페이서가 지금 타임라인의 몇 ms 지점을 흘려보내고 있는지 — <video>를 이 위치로
+ * seek해 "알림이 뜬 순간"과 "화면 장면"을 맞추는 데 씁니다. 아직 페이서가 없으면 404. */
+export function getPacerPosition(cameraId: string, channel: Channel): Promise<{ elapsed_ms: number }> {
+  return request<{ elapsed_ms: number }>(`/api/cameras/${cameraId}/pacer-position?channel=${channel}`);
+}
+
 // ── Detections ───────────────────────────────────────────────────────────
 export function getRecentDetections(limit = 50): Promise<Detection[]> {
   return request<Detection[]>(`/api/detections/recent?limit=${limit}`);

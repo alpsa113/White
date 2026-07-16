@@ -32,6 +32,8 @@ export interface AnalysisStatus {
   status: AnalysisStatusValue;
   progress: number;
   error?: string;
+  /** "image"면 탐지 대상 없는 정적 배경 컷 — <video> 대신 <img>로 표시하고 분석/타임라인을 건너뜁니다. */
+  kind?: "video" | "image";
 }
 
 export interface DetectionBox {
